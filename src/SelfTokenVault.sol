@@ -4,20 +4,28 @@ pragma solidity ^0.8.0;
 // Import OpenZeppelin contracts (make sure these are available in your project)
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+/* 
+  ─────────────────────────────────────────────
+   2a) SELF TOKEN VAULT
+       (Holds the creator’s x% tokens)
+  ─────────────────────────────────────────────
+*/
 
-/// @title SelfTokenVault
-/// @notice Holds self tokens so that the creator can later withdraw them.
 contract SelfTokenVault is Ownable {
-    IERC20 public token;
+    address public token;
 
-    constructor(IERC20 _token) Ownable(msg.sender){
+    constructor(address _token, address _creator) Ownable(msg.sender){
         token = _token;
+        // Transfer ownership of the vault to the creator
+        _transferOwnership(_creator);
     }
 
-    /// @notice Withdraw all tokens held by the vault.
+    /**
+     * @notice Withdraw all tokens from the vault to the vault owner (the creator).
+     */
     function withdraw() external onlyOwner {
-        uint256 balance = token.balanceOf(address(this));
-        require(balance > 0, "No tokens to withdraw");
-        token.transfer(owner(), balance);
+        uint256 balance = ERC20(token).balanceOf(address(this));
+        require(balance > 0, "No tokens in vault");
+        ERC20(token).transfer(owner(), balance);
     }
 }

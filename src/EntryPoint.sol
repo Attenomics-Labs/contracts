@@ -7,46 +7,82 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./SelfTokenVault.sol";
 import "./CreatorToken.sol";
 
+/* 
+  ─────────────────────────────────────────────
+   1) ENTRY POINT (Factory + Registry)
+  ─────────────────────────────────────────────
+*/
 
-/// @title EntryPoint
-/// @notice Factory contract that deploys a new CreatorToken contract using the provided parameters.
-contract EntryPoint {
-    // Store addresses of all deployed CreatorToken contracts.
-    address[] public deployedTokens;
 
-    event TokenDeployed(address indexed tokenAddress, address indexed creator);
+contract EntryPoint is Ownable {
+    // Optional: track which addresses are valid AI agents
+    mapping(address => bool) public allowedAIAgents;
 
-    /// @notice Deploys a new CreatorToken contract.
-    /// @param name Token name.
-    /// @param symbol Token symbol.
-    /// @param totalSupply Total token supply.
-    /// @param selfPercentage Percentage for self tokens.
-    /// @param marketPercentage Percentage for market tokens.
-    /// @param contractPercentage Percentage for reserved tokens.
-    /// @param marketAddr Address to receive market tokens.
-    /// @return The address of the newly deployed CreatorToken contract.
-    function deployToken(
+    // Maps a hashed Twitter/X handle to the deployed CreatorToken contract
+    mapping(bytes32 => address) public creatorTokenByHandle;
+
+    event AIAgentUpdated(address agent, bool allowed);
+    event CreatorTokenDeployed(address indexed creator, address tokenAddress, bytes32 handle);
+
+    constructor() Ownable(msg.sender){}
+    /**
+     * @notice Allows the owner to register/unregister an AI agent.
+     * @param agent The AI agent’s address.
+     * @param allowed True if allowed, false if removed.
+     */
+    function setAIAgent(address agent, bool allowed) external onlyOwner {
+        allowedAIAgents[agent] = allowed;
+        emit AIAgentUpdated(agent, allowed);
+    }
+
+    /**
+     * @notice Deploy a new CreatorToken contract, which will internally deploy:
+     *         - SelfTokenVault
+     *         - BondingCurve
+     *         - CreatorTokenSupporter
+     *
+     * @param handle Hashed Twitter/X handle (unique ID for the creator).
+     * @param name Name for both the NFT and ERC20 token.
+     * @param symbol Symbol for both the NFT and ERC20 token.
+     * @param totalSupply Total ERC20 supply.
+     * @param selfPercent x% to SelfTokenVault.
+     * @param marketPercent y% to BondingCurve.
+     * @param supporterPercent z% to CreatorTokenSupporter.
+     * @param aiAgent Address designated as the AI agent (owner of the supporter contract).
+     * @param nftMetadataURI URI for the NFT metadata (tokenId = 1).
+     */
+    function deployCreatorToken(
+        bytes32 handle,
         string memory name,
         string memory symbol,
         uint256 totalSupply,
-        uint8 selfPercentage,
-        uint8 marketPercentage,
-        uint8 contractPercentage,
-        address marketAddr
-    ) external returns (address) {
-        // Deploy a new CreatorToken, passing msg.sender as the creator.
+        uint8 selfPercent,
+        uint8 marketPercent,
+        uint8 supporterPercent,
+        address aiAgent,
+        string memory nftMetadataURI
+    ) external {
+        // Make sure this handle has not already been used
+        require(creatorTokenByHandle[handle] == address(0), "Handle already used");
+        // Optional check if the AI agent is allowed
+        // require(allowedAIAgents[aiAgent], "AI agent not allowed");
+
+        // Deploy CreatorToken
         CreatorToken token = new CreatorToken(
             name,
             symbol,
             totalSupply,
-            selfPercentage,
-            marketPercentage,
-            contractPercentage,
-            marketAddr,
-            msg.sender
+            selfPercent,
+            marketPercent,
+            supporterPercent,
+            msg.sender,       // The creator
+            aiAgent         // The AI agent
         );
-        deployedTokens.push(address(token));
-        emit TokenDeployed(address(token), msg.sender);
-        return address(token);
+
+        // Register in the mapping
+        creatorTokenByHandle[handle] = address(token);
+
+        // Emit an event for indexing
+        emit CreatorTokenDeployed(msg.sender, address(token), handle);
     }
 }
