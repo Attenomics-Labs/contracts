@@ -7,12 +7,14 @@ import "./CreatorToken.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 /**
- * @title EntryPoint
+ * @title AttenomicsCreatorEntryPoint
  * @notice This contract acts as a single, reliable onboarding entry point.
  *         It is an ERC721 (non-transferable NFT) contract that mints an NFT for each
- *         deployed CreatorToken contract. The NFT metadata can include details such as
- *         the token contract address and creator information. Additionally, the contract
- *         maintains a mapping from a hashed Twitter/X handle to the deployed CreatorToken address.
+ *         deployed CreatorToken contract. The NFT metadata (stored by this contract)
+ *         can include details such as the token contract address, creator information,
+ *         and other data required for fraud-proofing. Additionally, the contract maintains
+ *         mappings from a hashed Twitter/X handle to both the deployed CreatorToken address
+ *         and the associated NFT tokenId.
  */
 contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Mapping from hashed Twitter/X handle to deployed CreatorToken contract address.
@@ -20,6 +22,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     
     // Mapping from CreatorToken contract address to NFT tokenId.
     mapping(address => uint256) public tokenIdByCreatorToken;
+
+    // Mapping from hashed Twitter/X handle to NFT tokenId.
+    mapping(bytes32 => uint256) public tokenIdByHandle;
 
     // Counter for NFT tokenIds.
     uint256 public nextTokenId;
@@ -71,8 +76,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         string memory nftMetadataURI
     ) external {
         require(creatorTokenByHandle[handle] == address(0), "Handle already used");
-        // Optionally, enforce allowed AI agents:
-        // require(allowedAIAgents[aiAgent], "AI agent not allowed");
+        // Enforce allowed AI agents.
+        require(allowedAIAgents[aiAgent], "AI agent not allowed");
 
         // Deploy a new CreatorToken contract.
         CreatorToken token = new CreatorToken(
@@ -89,6 +94,7 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         // Store the deployed CreatorToken contract.
         creatorTokenByHandle[handle] = address(token);
         tokenIdByCreatorToken[address(token)] = nextTokenId;
+        tokenIdByHandle[handle] = nextTokenId;
 
         // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(msg.sender, nextTokenId);
@@ -97,7 +103,6 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         emit CreatorTokenDeployed(msg.sender, address(token), handle, nextTokenId);
         nextTokenId++;
     }
-
 
     // Override approve to disable approvals.
     function approve(address, uint256) public pure override(ERC721, IERC721) {
@@ -108,4 +113,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     function setApprovalForAll(address, bool) public pure override(ERC721, IERC721) {
         revert("Non-transferable NFT");
     }
+
+    function getHandleHash(string memory username) public pure returns (bytes32) {
+    return keccak256(abi.encodePacked(username));
+}
+
 }
