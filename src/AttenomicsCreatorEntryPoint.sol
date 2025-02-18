@@ -19,7 +19,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Mapping from hashed Twitter/X handle to deployed CreatorToken contract address.
     mapping(bytes32 => address) public creatorTokenByHandle;
-    
+
     // Mapping from CreatorToken contract address to NFT tokenId.
     mapping(address => uint256) public tokenIdByCreatorToken;
 
@@ -73,9 +73,13 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         uint8 marketPercent,
         uint8 supporterPercent,
         address aiAgent,
-        string memory nftMetadataURI
+        string memory nftMetadataURI,
+        address creator
     ) external {
-        require(creatorTokenByHandle[handle] == address(0), "Handle already used");
+        require(
+            creatorTokenByHandle[handle] == address(0),
+            "Handle already used"
+        );
         // Enforce allowed AI agents.
         require(allowedAIAgents[aiAgent], "AI agent not allowed");
 
@@ -87,7 +91,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
             selfPercent,
             marketPercent,
             supporterPercent,
-            msg.sender, // creator
+            creator, // @dev is this a vulnerability? where anyone can deploy a token for someone else? should be msg.sender?
+            handle,
             aiAgent
         );
 
@@ -99,8 +104,13 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(msg.sender, nextTokenId);
         _setTokenURI(nextTokenId, nftMetadataURI);
-        
-        emit CreatorTokenDeployed(msg.sender, address(token), handle, nextTokenId);
+
+        emit CreatorTokenDeployed(
+            msg.sender,
+            address(token),
+            handle,
+            nextTokenId
+        );
         nextTokenId++;
     }
 
@@ -108,14 +118,18 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     function approve(address, uint256) public pure override(ERC721, IERC721) {
         revert("Non-transferable NFT");
     }
-    
+
     // Override setApprovalForAll to disable approvals.
-    function setApprovalForAll(address, bool) public pure override(ERC721, IERC721) {
+    function setApprovalForAll(
+        address,
+        bool
+    ) public pure override(ERC721, IERC721) {
         revert("Non-transferable NFT");
     }
 
-    function getHandleHash(string memory username) public pure returns (bytes32) {
-    return keccak256(abi.encodePacked(username));
-}
-
+    function getHandleHash(
+        string memory username
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(username));
+    }
 }

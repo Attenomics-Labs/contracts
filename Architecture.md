@@ -38,6 +38,7 @@ The protocol’s architecture is divided into three main sections:
 - Deployed as an ERC20 contract, the Creator Token is registered by the EntryPoint contract in the form of an NFT.
 - The Creator Token contract further deploys three separate contracts (detailed in the Token Economy section).
 - It serves as a standard ERC20 token and does not store any additional metadata; all metadata is maintained by the EntryPoint NFT.
+- For creator token i would like to go with Efficient ByteCode20.sol for token Contract in future but for MVP its not important
 
 **Key Features:**
 - **Integrated Sub‑Contracts:**  
