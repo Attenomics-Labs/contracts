@@ -23,8 +23,11 @@ contract CreatorTokenSupporter is Ownable {
     // Address of the CreatorToken (ERC20) managed by this contract.
     address public creatorToken;
     address public aiAgent;
-    //address of GasliteDrop contract
+    // Address of GasliteDrop contract
     address public gasLiteDropAddress;
+
+    // Mapping to track used hashes to prevent double-spending attacks.
+    mapping(bytes32 => bool) public usedHashes;
 
     // Configuration used in the constructor.
     struct DistributorConfig {
@@ -40,6 +43,9 @@ contract CreatorTokenSupporter is Ownable {
         uint256[] amounts;
         uint256 totalAmount;
     }
+
+    event DistributionExecuted(bytes32 indexed dataHash, address indexed executor);
+    event AIAgentUpdated(address indexed agent, bool allowed);
 
     modifier onlyAiAgent() {
         require(msg.sender == aiAgent, "Only AI agent can call this function");
@@ -58,7 +64,7 @@ contract CreatorTokenSupporter is Ownable {
     }
 
     /**
-     * @notice Verifies that the provided DistributionData is signed by the AI agent (owner).
+     * @notice Verifies that the provided DistributionData is signed by the AI agent (owner) and prevents double usage.
      * @param data The DistributionData struct to verify.
      * @param signature The signature over the hash of the distribution data.
      * @return True if the signature is valid, false otherwise.
@@ -66,6 +72,7 @@ contract CreatorTokenSupporter is Ownable {
     function _verifyDistributionData(DistributionData memory data, bytes memory signature) internal view returns (bool) {
         // Compute the hash of the distribution data.
         bytes32 dataHash = keccak256(abi.encode(data.recipients, data.amounts, data.totalAmount));
+        require(!usedHashes[dataHash], "Hash already used"); // Prevent double spending
         // Apply the Ethereum Signed Message prefix.
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(dataHash);
         // Recover the signer from the signature.
@@ -79,7 +86,7 @@ contract CreatorTokenSupporter is Ownable {
      * @param data The DistributionData struct containing recipients, amounts, and totalAmount.
      */
     function _distribute(DistributionData memory data) internal {
-        IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken,data.recipients, data.amounts, data.totalAmount);
+        IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken, data.recipients, data.amounts, data.totalAmount);
     }
 
     /**
@@ -90,9 +97,16 @@ contract CreatorTokenSupporter is Ownable {
     function distributeWithData(bytes memory distributionDataBytes, bytes memory signature) external {
         // Decode the distribution data.
         DistributionData memory data = abi.decode(distributionDataBytes, (DistributionData));
+        // Compute the hash of the distribution data.
+        bytes32 dataHash = keccak256(abi.encode(data.recipients, data.amounts, data.totalAmount));
         // Verify the signature using the helper function.
         require(_verifyDistributionData(data, signature), "Invalid signature");
+        // Mark hash as used to prevent double-spending.
+        usedHashes[dataHash] = true;
+        // Execute distribution.
         _distribute(data);
+        // Emit event
+        emit DistributionExecuted(dataHash, msg.sender);
     }
 
     /**
@@ -102,6 +116,14 @@ contract CreatorTokenSupporter is Ownable {
      * @param amounts Array of token amounts corresponding to each recipient.
      */
     function distribute(address[] calldata recipients, uint256[] calldata amounts) external onlyAiAgent {
-        
+        // Compute the total amount to distribute.
+        uint256 totalAmount;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalAmount += amounts[i];
+        }
+        // Execute the airdrop.
+        IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken, recipients, amounts, totalAmount);
+        // Emit event
+        emit DistributionExecuted(keccak256(abi.encode(recipients, amounts, totalAmount)), msg.sender);
     }
 }
