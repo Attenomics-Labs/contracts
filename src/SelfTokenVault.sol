@@ -1,27 +1,38 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// Import OpenZeppelin contracts (make sure these are available in your project)
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-/* 
-  ─────────────────────────────────────────────
-   2a) SELF TOKEN VAULT
-       (Holds the creator’s x% tokens)
-  ─────────────────────────────────────────────
-*/
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+/**
+ * @title SelfTokenVault
+ * @notice Holds the creator’s tokens (x%) until the creator withdraws them.
+ *         It decodes a packed configuration (VaultConfig) that can specify parameters
+ *         such as the drip percentage, drip interval, lock time, and locked percentage.
+ */
 contract SelfTokenVault is Ownable {
     address public token;
 
-    constructor(address _token, address _creator) Ownable(msg.sender){
+    // Example vault configuration struct.
+    struct VaultConfig {
+        uint256 dripPercentage;   // Percentage of tokens to drip per interval.
+        uint256 dripInterval;     // Interval (in seconds) between drips.
+        uint256 lockTime;         // Lock period (in seconds).
+        uint256 lockedPercentage; // Percentage of tokens to lock.
+    }
+    VaultConfig public vaultConfig;
+
+    constructor(address _token, address _creator, bytes memory selfVaultConfig) Ownable(msg.sender) {
         token = _token;
-        // Transfer ownership of the vault to the creator
+        // Decode the vault configuration data.
+        VaultConfig memory config = abi.decode(selfVaultConfig, (VaultConfig));
+        vaultConfig = config;
+        // Transfer ownership of the vault to the creator.
         _transferOwnership(_creator);
     }
 
     /**
-     * @notice Withdraw all tokens from the vault to the vault owner (the creator).
+     * @notice Withdraws all tokens from the vault to the vault owner (the creator).
      */
     function withdraw() external onlyOwner {
         uint256 balance = ERC20(token).balanceOf(address(this));

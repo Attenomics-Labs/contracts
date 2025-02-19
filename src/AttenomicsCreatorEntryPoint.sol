@@ -54,63 +54,51 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
     /**
      * @notice Deploys a new CreatorToken contract and mints a non-transferable NFT representing it.
-     * @param handle Hashed Twitter/X handle (a unique identifier for the creator).
+     * @param configData Packed configuration parameters as bytes. This data encodes the CreatorToken.TokenConfig struct.
+     * @param distributorConfigData Packed distributor configuration data (for CreatorTokenSupporter).
+     * @param vaultConfigData Packed vault configuration data (for SelfTokenVault).
      * @param name Name for the CreatorToken (used for both the NFT and ERC20 token).
      * @param symbol Symbol for the CreatorToken.
-     * @param totalSupply Total ERC20 token supply.
-     * @param selfPercent Percentage allocated to the SelfTokenVault (x).
-     * @param marketPercent Percentage allocated to the BondingCurve (y).
-     * @param supporterPercent Percentage allocated to the Distributor (z).
-     * @param aiAgent Address designated as the AI agent (owner of the distributor contract).
      * @param nftMetadataURI Metadata URI for the NFT (should include details like token contract address, creator info, etc).
      */
     function deployCreatorToken(
-        bytes32 handle,
+        bytes memory configData,
+        bytes memory distributorConfigData,
+        bytes memory vaultConfigData,
         string memory name,
         string memory symbol,
-        uint256 totalSupply,
-        uint8 selfPercent,
-        uint8 marketPercent,
-        uint8 supporterPercent,
-        address aiAgent,
-        string memory nftMetadataURI,
-        address creator
+        string memory nftMetadataURI
     ) external {
-        require(
-            creatorTokenByHandle[handle] == address(0),
-            "Handle already used"
-        );
-        // Enforce allowed AI agents.
-        require(allowedAIAgents[aiAgent], "AI agent not allowed");
+        // Decode the data to extract the handle.
+        CreatorToken.TokenConfig memory config = abi.decode(configData, (CreatorToken.TokenConfig));
+        require(creatorTokenByHandle[config.handle] == address(0), "Handle already used");
 
-        // Deploy a new CreatorToken contract.
+        // Enforce allowed AI agents.
+        require(allowedAIAgents[config.aiAgent], "AI agent not allowed");
+
+        // For security, the creator is set to msg.sender.
+        address creator = msg.sender;
+
+        // Deploy a new CreatorToken contract, passing the packed configuration data.
         CreatorToken token = new CreatorToken(
             name,
             symbol,
-            totalSupply,
-            selfPercent,
-            marketPercent,
-            supporterPercent,
-            creator, // @dev is this a vulnerability? where anyone can deploy a token for someone else? should be msg.sender?
-            handle,
-            aiAgent
+            configData,
+            distributorConfigData,
+            vaultConfigData,
+            creator
         );
 
-        // Store the deployed CreatorToken contract.
-        creatorTokenByHandle[handle] = address(token);
+        // Update mappings.
+        creatorTokenByHandle[config.handle] = address(token);
         tokenIdByCreatorToken[address(token)] = nextTokenId;
-        tokenIdByHandle[handle] = nextTokenId;
+        tokenIdByHandle[config.handle] = nextTokenId;
 
         // Mint the NFT to the creator. This NFT is non-transferable.
-        _safeMint(msg.sender, nextTokenId);
+        _safeMint(creator, nextTokenId);
         _setTokenURI(nextTokenId, nftMetadataURI);
 
-        emit CreatorTokenDeployed(
-            msg.sender,
-            address(token),
-            handle,
-            nextTokenId
-        );
+        emit CreatorTokenDeployed(creator, address(token), config.handle, nextTokenId);
         nextTokenId++;
     }
 
@@ -120,16 +108,11 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     }
 
     // Override setApprovalForAll to disable approvals.
-    function setApprovalForAll(
-        address,
-        bool
-    ) public pure override(ERC721, IERC721) {
+    function setApprovalForAll(address, bool) public pure override(ERC721, IERC721) {
         revert("Non-transferable NFT");
     }
 
-    function getHandleHash(
-        string memory username
-    ) public pure returns (bytes32) {
+    function getHandleHash(string memory username) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(username));
     }
 }

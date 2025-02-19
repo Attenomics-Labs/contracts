@@ -15,15 +15,25 @@ import "./CreatorTokenSupporter.sol";
 */
 
 contract CreatorToken is ERC20 {
+    // Pack the token configuration parameters in a struct.
+    struct TokenConfig {
+        uint256 totalSupply;
+        uint8 selfPercent;
+        uint8 marketPercent;
+        uint8 supporterPercent;
+        bytes32 handle;
+        address aiAgent;
+    }
+
     // Addresses of the deployed sub-contracts.
     address public selfTokenVault;       // x% goes here
     address public bondingCurve;         // y% goes here
     address public supporterContract;    // z% goes here
 
-    // The creator is the one who called from EntryPoint.
+    // The creator (set by the EntryPoint).
     address public creator;
 
-    // The hash of creator handle.
+    // The hash of the creator's handle.
     bytes32 public handle;
     
     // The AI agent address.
@@ -35,36 +45,33 @@ contract CreatorToken is ERC20 {
     /**
      * @param _name Token name (used by ERC20).
      * @param _symbol Token symbol (used by ERC20).
-     * @param _totalSupply Total ERC20 supply.
-     * @param _selfPercent Percentage allocated to the SelfTokenVault (x).
-     * @param _marketPercent Percentage allocated to the BondingCurve (y).
-     * @param _supporterPercent Percentage allocated to the CreatorTokenSupporter (z).
+     * @param configData Packed configuration parameters as bytes.
+     * @param distributorConfigData Packed configuration for the distributor contract.
+     * @param vaultConfigData Packed configuration for the vault contract.
      * @param _creator The address that will own this CreatorToken and its vault.
-     * @param _aiAgent The address designated as the AI agent (owner of the supporter).
      */
     constructor(
         string memory _name,
         string memory _symbol,
-        uint256 _totalSupply,
-        uint8 _selfPercent,
-        uint8 _marketPercent,
-        uint8 _supporterPercent,
-        address _creator,
-        bytes32 _handle,
-        address _aiAgent
+        bytes memory configData,
+        bytes memory distributorConfigData,
+        bytes memory vaultConfigData,
+        address _creator
     ) ERC20(_name, _symbol) {
+        // Decode the passed bytes into the TokenConfig struct.
+        TokenConfig memory config = abi.decode(configData, (TokenConfig));
         require(
-            _selfPercent + _marketPercent + _supporterPercent == 100,
+            config.selfPercent + config.marketPercent + config.supporterPercent == 100,
             "Invalid percentage split"
         );
 
         creator = _creator;
-        aiAgent = _aiAgent;
-        handle = _handle;
-        totalERC20Supply = _totalSupply;
+        aiAgent = config.aiAgent;
+        handle = config.handle;
+        totalERC20Supply = config.totalSupply;
 
         // Deploy the SelfTokenVault (x%).
-        SelfTokenVault vault = new SelfTokenVault(address(this), _creator);
+        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData);
         selfTokenVault = address(vault);
 
         // Deploy the BondingCurve (y%).
@@ -72,13 +79,13 @@ contract CreatorToken is ERC20 {
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
-        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), _aiAgent);
+        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData);
         supporterContract = address(supporter);
 
         // Mint the ERC20 supply in three slices.
-        uint256 selfTokens = (_totalSupply * _selfPercent) / 100;
-        uint256 marketTokens = (_totalSupply * _marketPercent) / 100;
-        uint256 supporterTokens = (_totalSupply * _supporterPercent) / 100;
+        uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
+        uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
+        uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
 
         _mint(selfTokenVault, selfTokens);         // x% → SelfTokenVault
         _mint(bondingCurve, marketTokens);          // y% → BondingCurve
