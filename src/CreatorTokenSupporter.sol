@@ -7,6 +7,11 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./interfaces/IGasliteDrop.sol";
 
+
+/**
+ * @dev security tradeoff suppose that everytime we do an airdrop we verify whether the token that has been distributed are correctly or not for particular peroiod of time x-y then the issue comes is that we have a tradeoff of gas cost but not having it is being reliable on ai agent that it actually does the airdrop correct 
+ */
+
 /**
  * @title CreatorTokenSupporter
  * @notice Holds tokens (z%) that will be distributed over time.
@@ -22,12 +27,16 @@ contract CreatorTokenSupporter is Ownable {
 
     // Address of the CreatorToken (ERC20) managed by this contract.
     address public creatorToken;
+    // AI agent address (set as the owner in the constructor).
     address public aiAgent;
-    // Address of GasliteDrop contract
+    // Address of the GasliteDrop contract.
     address public gasLiteDropAddress;
 
-    // Mapping to track used hashes to prevent double-spending attacks.
+    // Mapping to track used hashes to prevent double-spending.
     mapping(bytes32 => bool) public usedHashes;
+
+    // Track the total tokens distributed so far.
+    uint256 public totalDistributed;
 
     // Configuration used in the constructor.
     struct DistributorConfig {
@@ -52,19 +61,25 @@ contract CreatorTokenSupporter is Ownable {
         _;
     }
 
-    constructor(address _creatorToken, address _aiAgent, bytes memory distributorConfigData, address _gasLiteDropAddress) Ownable(msg.sender) {
+    constructor(
+        address _creatorToken,
+        address _aiAgent,
+        bytes memory distributorConfigData,
+        address _gasLiteDropAddress
+    ) Ownable(msg.sender) {
         creatorToken = _creatorToken;
         // Decode the distributor configuration data.
         DistributorConfig memory config = abi.decode(distributorConfigData, (DistributorConfig));
         distributorConfig = config;
-        // Transfer ownership of the supporter contract to the AI agent.
         aiAgent = _aiAgent;
-        // Gaslite Deployed contract address
         gasLiteDropAddress = _gasLiteDropAddress;
+        // Transfer ownership of the supporter contract to the AI agent.
+        _transferOwnership(_aiAgent);
     }
 
     /**
-     * @notice Verifies that the provided DistributionData is signed by the AI agent (owner) and prevents double usage.
+     * @notice Verifies that the provided DistributionData is signed by the AI agent (owner)
+     *         and that its hash has not been used before.
      * @param data The DistributionData struct to verify.
      * @param signature The signature over the hash of the distribution data.
      * @return True if the signature is valid, false otherwise.
@@ -77,7 +92,7 @@ contract CreatorTokenSupporter is Ownable {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(dataHash);
         // Recover the signer from the signature.
         address signer = ethSignedHash.recover(signature);
-        // Check that the recovered signer is the AI agent (i.e. the owner).
+        // Check that the recovered signer is the AI agent.
         return signer == aiAgent;
     }
 
@@ -86,11 +101,14 @@ contract CreatorTokenSupporter is Ownable {
      * @param data The DistributionData struct containing recipients, amounts, and totalAmount.
      */
     function _distribute(DistributionData memory data) internal {
+        // Call the external GasliteDrop contract to perform the airdrop.
         IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken, data.recipients, data.amounts, data.totalAmount);
     }
 
     /**
      * @notice Distributes tokens based on off-chain signed distribution data.
+     *         Before distribution, it checks that the contract's current token balance is sufficient,
+     *         and it updates the totalDistributed counter.
      * @param distributionDataBytes Packed bytes encoding a DistributionData struct.
      * @param signature The signature over the distribution data, produced off-chain by the AI agent.
      */
@@ -101,29 +119,27 @@ contract CreatorTokenSupporter is Ownable {
         bytes32 dataHash = keccak256(abi.encode(data.recipients, data.amounts, data.totalAmount));
         // Verify the signature using the helper function.
         require(_verifyDistributionData(data, signature), "Invalid signature");
+        // Check that the contract has enough tokens for this distribution.
+        uint256 currentBalance = ERC20(creatorToken).balanceOf(address(this));
+        require(currentBalance >= data.totalAmount, "Insufficient contract balance");
         // Mark hash as used to prevent double-spending.
         usedHashes[dataHash] = true;
         // Execute distribution.
         _distribute(data);
-        // Emit event
+        // Update total distributed tokens.
+        totalDistributed += data.totalAmount;
         emit DistributionExecuted(dataHash, msg.sender);
     }
 
     /**
      * @notice Directly distributes tokens from this contract to multiple recipients.
-     * @dev Only the AI agent (owner) can call this function.
+     *         Only the AI agent (owner) can call this function.
      * @param recipients Array of addresses to receive tokens.
      * @param amounts Array of token amounts corresponding to each recipient.
      */
-    function distribute(address[] calldata recipients, uint256[] calldata amounts) external onlyAiAgent {
-        // Compute the total amount to distribute.
-        uint256 totalAmount;
-        for (uint256 i = 0; i < amounts.length; i++) {
-            totalAmount += amounts[i];
-        }
-        // Execute the airdrop.
+    function distribute(address[] calldata recipients, uint256[] calldata amounts, uint256 totalAmount) external onlyAiAgent {
         IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken, recipients, amounts, totalAmount);
-        // Emit event
+        totalDistributed += totalAmount;
         emit DistributionExecuted(keccak256(abi.encode(recipients, amounts, totalAmount)), msg.sender);
     }
 }
