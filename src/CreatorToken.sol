@@ -91,6 +91,9 @@ contract CreatorToken is ERC20 {
         _mint(selfTokenVault, selfTokens);         // x% → SelfTokenVault
         _mint(bondingCurve, marketTokens);          // y% → BondingCurve
         _mint(supporterContract, supporterTokens);  // z% → CreatorTokenSupporter
+
+        // initilize the vault
+        vault.initialize();
     }
 
     // Optional: override ERC20 decimals.

@@ -17,6 +17,7 @@ contract BondingCurve {
         creatorToken = _creatorToken;
     }
 
+
     // Example "buy" function
     // In a real bonding curve, you'd have logic for pricing, liquidity, etc.
     function buy(uint256 amount) external payable {
