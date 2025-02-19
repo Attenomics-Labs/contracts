@@ -30,6 +30,8 @@ contract CreatorToken is ERC20 {
     address public bondingCurve;         // y% goes here
     address public supporterContract;    // z% goes here
 
+    address public protocolFeeAddress;
+
     // The creator (set by the EntryPoint).
     address public creator;
 
@@ -76,7 +78,7 @@ contract CreatorToken is ERC20 {
         selfTokenVault = address(vault);
 
         // Deploy the BondingCurve (y%).
-        BondingCurve curve = new BondingCurve(address(this));
+        BondingCurve curve = new BondingCurve(address(this), protocolFeeAddress);
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
