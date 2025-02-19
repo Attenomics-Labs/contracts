@@ -56,7 +56,8 @@ contract CreatorToken is ERC20 {
         bytes memory configData,
         bytes memory distributorConfigData,
         bytes memory vaultConfigData,
-        address _creator
+        address _creator,
+        address gasLiteDropContractAddress
     ) ERC20(_name, _symbol) {
         // Decode the passed bytes into the TokenConfig struct.
         TokenConfig memory config = abi.decode(configData, (TokenConfig));
@@ -79,7 +80,7 @@ contract CreatorToken is ERC20 {
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
-        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData);
+        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData,gasLiteDropContractAddress);
         supporterContract = address(supporter);
 
         // Mint the ERC20 supply in three slices.

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "./interfaces/IGasliteDrop.sol";
 
 /**
  * @title CreatorTokenSupporter
@@ -22,6 +23,8 @@ contract CreatorTokenSupporter is Ownable {
     // Address of the CreatorToken (ERC20) managed by this contract.
     address public creatorToken;
     address public aiAgent;
+    //address of GasliteDrop contract
+    address public gasLiteDropAddress;
 
     // Configuration used in the constructor.
     struct DistributorConfig {
@@ -43,13 +46,15 @@ contract CreatorTokenSupporter is Ownable {
         _;
     }
 
-    constructor(address _creatorToken, address _aiAgent, bytes memory distributorConfigData) Ownable(msg.sender) {
+    constructor(address _creatorToken, address _aiAgent, bytes memory distributorConfigData, address _gasLiteDropAddress) Ownable(msg.sender) {
         creatorToken = _creatorToken;
         // Decode the distributor configuration data.
         DistributorConfig memory config = abi.decode(distributorConfigData, (DistributorConfig));
         distributorConfig = config;
         // Transfer ownership of the supporter contract to the AI agent.
         aiAgent = _aiAgent;
+        // Gaslite Deployed contract address
+        gasLiteDropAddress = _gasLiteDropAddress;
     }
 
     /**
@@ -74,17 +79,7 @@ contract CreatorTokenSupporter is Ownable {
      * @param data The DistributionData struct containing recipients, amounts, and totalAmount.
      */
     function _distribute(DistributionData memory data) internal {
-        // Optionally verify that the sum of amounts equals the totalAmount.
-        uint256 sum;
-        for (uint256 i = 0; i < data.amounts.length; i++) {
-            sum += data.amounts[i];
-        }
-        require(sum == data.totalAmount, "Total amount mismatch");
-
-        // Distribute tokens to each recipient.
-        for (uint256 i = 0; i < data.recipients.length; i++) {
-            ERC20(creatorToken).transfer(data.recipients[i], data.amounts[i]);
-        }
+        IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken,data.recipients, data.amounts, data.totalAmount);
     }
 
     /**

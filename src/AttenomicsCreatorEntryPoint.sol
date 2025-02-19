@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./CreatorToken.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "./GasliteDrop.sol";
 
 /**
  * @title AttenomicsCreatorEntryPoint
@@ -29,6 +30,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Counter for NFT tokenIds.
     uint256 public nextTokenId;
 
+    // GasliteDrop contract address
+    address gasliteDropAddress;
+
     // Mapping of allowed AI agents.
     mapping(address => bool) public allowedAIAgents;
 
@@ -40,7 +44,10 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         uint256 tokenId
     );
 
-    constructor() ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {}
+    constructor() ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
+        GasliteDrop gasliteDrop = new GasliteDrop();
+        gasliteDropAddress = address(gasliteDrop);
+    }
 
     /**
      * @notice Allows the owner (protocol admin) to register or unregister an AI agent.
@@ -86,7 +93,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
             configData,
             distributorConfigData,
             vaultConfigData,
-            creator
+            creator,
+            gasliteDropAddress
         );
 
         // Update mappings.
