@@ -73,8 +73,13 @@ contract CreatorToken is ERC20 {
         handle = config.handle;
         totalERC20Supply = config.totalSupply;
 
+        // Mint tokens
+        uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
+        uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
+        uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
+
         // Deploy the SelfTokenVault (x%).
-        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData);
+        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData , selfTokens);
         selfTokenVault = address(vault);
 
         // Deploy the BondingCurve (y%).
@@ -85,19 +90,11 @@ contract CreatorToken is ERC20 {
         CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
         supporterContract = address(supporter);
 
-        // Mint tokens
-        uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
-        uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
-        uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
+
 
         _mint(selfTokenVault, selfTokens);
         _mint(bondingCurve, marketTokens);
         _mint(supporterContract, supporterTokens);
-    }
-
-    // Add a separate function to initialize the vault
-    function initializeVault() external {
-        SelfTokenVault(selfTokenVault).initialize();
     }
 
     // Optional: override ERC20 decimals.

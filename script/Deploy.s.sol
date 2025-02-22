@@ -27,8 +27,12 @@ contract Deploy is Script {
         // Get private key from environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         
-        // Start broadcasting transactions
+        // Start broadcasting transactions with higher gas price to replace pending tx
         vm.startBroadcast(deployerPrivateKey);
+
+        // Add this line to ensure proper nonce
+        uint64 nonce = vm.getNonce(vm.addr(deployerPrivateKey));
+        vm.setNonce(vm.addr(deployerPrivateKey), nonce);
 
         // Set protocol addresses
         protocolFeeAddress = vm.addr(deployerPrivateKey);
@@ -98,8 +102,7 @@ contract Deploy is Script {
         creatorToken = entryPointContract.creatorTokenByHandle(handle);
         CreatorToken token = CreatorToken(creatorToken);
         
-        // Initialize the vault after deployment
-        token.initializeVault();
+
         
         selfTokenVault = token.selfTokenVault();
         supporter = token.supporterContract();

@@ -44,24 +44,26 @@ contract SelfTokenVault is Ownable {
      * @param _creator The address that will own the vault (typically the creator).
      * @param selfVaultConfig Packed configuration data encoding a VaultConfig struct.
      */
-    constructor(address _token, address _creator, bytes memory selfVaultConfig) Ownable(_creator) {
+    constructor(address _token, address _creator, bytes memory selfVaultConfig , uint256 _initialBalance) Ownable(_creator) {
         token = _token;
         // Decode the vault configuration data.
         VaultConfig memory config = abi.decode(selfVaultConfig, (VaultConfig));
         vaultConfig = config;
         // Set vesting start time to deployment time.
         startTime = block.timestamp;
-    }
-
-    /**
-     * @notice Initializes the vault by recording the initial token balance.
-     *         This should be called once, after tokens have been minted/transferred to this contract.
-     */
-    function initialize() public {
-        require(!initialized, "Already initialized");
-        initialBalance = ERC20(token).balanceOf(address(this));
+        initialBalance = _initialBalance;
         initialized = true;
     }
+
+    // /**
+    //  * @notice Initializes the vault by recording the initial token balance.
+    //  *         This should be called once, after tokens have been minted/transferred to this contract.
+    //  */
+    // function initialize() public {
+    //     require(!initialized, "Already initialized");
+    //     initialBalance = ERC20(token).balanceOf(address(this));
+    //     initialized = true;
+    // }
 
     /**
      * @notice Calculates the available token amount for withdrawal based on the vesting schedule.
