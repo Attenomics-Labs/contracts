@@ -38,13 +38,15 @@ contract Deploy is Script {
         protocolFeeAddress = vm.addr(deployerPrivateKey);
         aiAgent = vm.addr(deployerPrivateKey);
 
-        // 1. Deploy GasliteDrop
+        // Deploy GasliteDrop first
         GasliteDrop gasliteDropContract = new GasliteDrop();
         gasliteDrop = address(gasliteDropContract);
         console2.log("GasliteDrop:", gasliteDrop);
 
-        // 2. Deploy EntryPoint
-        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(gasliteDrop);
+        // Deploy EntryPoint with GasliteDrop address
+        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(
+            address(gasliteDropContract)
+        );
         entryPoint = address(entryPointContract);
         console2.log("EntryPoint:", entryPoint);
 
