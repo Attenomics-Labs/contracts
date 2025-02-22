@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title SelfTokenVault
- * @notice Holds the creator’s tokens (x%) until they are withdrawn.
+ * @notice Holds the creator's tokens (x%) until they are withdrawn.
  *         Tokens are vested according to a configurable schedule—similar
  *         to VC vesting. A portion of tokens (lockedPercentage) is subject
  *         to vesting: after an initial lock period (lockTime), every dripInterval

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -35,6 +35,10 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
     // Mapping of allowed AI agents.
     mapping(address => bool) public allowedAIAgents;
+
+    // Add these mappings near the other state variables
+    mapping(bytes32 => address) public tokenVaultByHandle;
+    mapping(bytes32 => address) public tokenSupporterByHandle;
 
     event AIAgentUpdated(address agent, bool allowed);
     event CreatorTokenDeployed(
@@ -97,6 +101,10 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
             gasliteDropAddress
         );
 
+        // Store the vault and supporter addresses
+        tokenVaultByHandle[config.handle] = token.getVaultAddress();
+        tokenSupporterByHandle[config.handle] = token.getSupporterAddress();
+
         // Update mappings.
         creatorTokenByHandle[config.handle] = address(token);
         tokenIdByCreatorToken[address(token)] = nextTokenId;
@@ -123,4 +131,6 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     function getHandleHash(string memory username) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(username));
     }
+
+  
 }

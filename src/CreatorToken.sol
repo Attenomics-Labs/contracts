@@ -30,7 +30,7 @@ contract CreatorToken is ERC20 {
     address public bondingCurve;         // y% goes here
     address public supporterContract;    // z% goes here
 
-    address public protocolFeeAddress;
+    address public protocolFeeAddress = 0xE2B48E911562a221619533a5463975Fdd92E7fC7;
 
     // The creator (set by the EntryPoint).
     address public creator;
@@ -82,24 +82,35 @@ contract CreatorToken is ERC20 {
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
-        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData,gasLiteDropContractAddress);
+        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
         supporterContract = address(supporter);
 
-        // Mint the ERC20 supply in three slices.
+        // Mint tokens
         uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
         uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
         uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
 
-        _mint(selfTokenVault, selfTokens);         // x% → SelfTokenVault
-        _mint(bondingCurve, marketTokens);          // y% → BondingCurve
-        _mint(supporterContract, supporterTokens);  // z% → CreatorTokenSupporter
+        _mint(selfTokenVault, selfTokens);
+        _mint(bondingCurve, marketTokens);
+        _mint(supporterContract, supporterTokens);
+    }
 
-        // initilize the vault
-        vault.initialize();
+    // Add a separate function to initialize the vault
+    function initializeVault() external {
+        SelfTokenVault(selfTokenVault).initialize();
     }
 
     // Optional: override ERC20 decimals.
     function decimals() public pure override returns (uint8) {
         return 18;
+    }
+
+    // Add these getter functions
+    function getVaultAddress() public view returns (address) {
+        return address(selfTokenVault);
+    }
+
+    function getSupporterAddress() public view returns (address) {
+        return address(supporterContract);
     }
 }
