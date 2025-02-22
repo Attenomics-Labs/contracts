@@ -52,8 +52,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         uint256 tokenId
     );
 
-    constructor() ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
-        gasliteDropAddress = address(new GasliteDrop());
+    constructor(address _gasliteDropAddress) ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
+        gasliteDropAddress = _gasliteDropAddress;
     }
 
     /**

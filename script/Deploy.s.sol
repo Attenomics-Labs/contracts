@@ -44,7 +44,7 @@ contract Deploy is Script {
         console2.log("GasliteDrop:", gasliteDrop);
 
         // 2. Deploy EntryPoint
-        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint();
+        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(gasliteDrop);
         entryPoint = address(entryPointContract);
         console2.log("EntryPoint:", entryPoint);
 

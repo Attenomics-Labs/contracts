@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./SelfTokenVault.sol";
-import "./BondingCurve.sol";
-import "./CreatorTokenSupporter.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SelfTokenVault} from "./SelfTokenVault.sol";
+import {BondingCurve} from "./BondingCurve.sol";
+import {CreatorTokenSupporter} from "./CreatorTokenSupporter.sol";
 
 /*
 ─────────────────────────────────────────────
