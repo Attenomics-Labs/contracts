@@ -132,5 +132,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         return keccak256(abi.encodePacked(username));
     }
 
+    function totalSupply() public view returns (uint256) {
+        return nextTokenId;
+    }
   
 }
