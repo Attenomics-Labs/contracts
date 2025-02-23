@@ -104,6 +104,57 @@ contract BondingCurveTest is Test {
 
     }
 
+
+    function testBuyAndSellOneK() public {
+        uint256 buyAmount = 1000 * 1e18;
+        uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+
+        // Provide the ETH and buy
+        vm.deal(address(this), buyCost);
+        uint256 beforeBal = token.balanceOf(address(this));
+        bondingCurve.buy{value: buyCost}(buyAmount);
+
+        // Check we received tokens
+        assertEq(token.balanceOf(address(this)) - beforeBal, buyAmount);
+
+        // Approve and sell
+        token.approve(address(bondingCurve), buyAmount);
+        uint256 beforeEth = address(this).balance;
+        beforeBal = token.balanceOf(address(this));
+        bondingCurve.sell(buyAmount);
+        uint256 afterEth = address(this).balance;
+
+        // We should have more ETH than before
+        assertTrue(afterEth > beforeEth);
+
+
+    }
+
+       function testBuyAndSellOneMil() public {
+        uint256 buyAmount = 1000000 * 1e18;
+        uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+
+        // Provide the ETH and buy
+        vm.deal(address(this), buyCost);
+        uint256 beforeBal = token.balanceOf(address(this));
+        bondingCurve.buy{value: buyCost}(buyAmount);
+
+        // Check we received tokens
+        assertEq(token.balanceOf(address(this)) - beforeBal, buyAmount);
+
+        // Approve and sell
+        token.approve(address(bondingCurve), buyAmount);
+        uint256 beforeEth = address(this).balance;
+        beforeBal = token.balanceOf(address(this));
+        bondingCurve.sell(buyAmount);
+        uint256 afterEth = address(this).balance;
+
+        // We should have more ETH than before
+        assertTrue(afterEth > beforeEth);
+
+
+    }
+
     function testProvideLiquidity() public {
         uint256 initialBal = token.balanceOf(address(bondingCurve));
 

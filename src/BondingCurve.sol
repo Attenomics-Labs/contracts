@@ -39,9 +39,9 @@ contract BondingCurve {
 
     /**
      * We multiply the final cost by (1 ether / SCALING_FACTOR).
-     * Increasing from 1e8 to 1e12 reduces the final price by an extra factor of 10,000.
+     * Increasing from 1e8 to 1e12 reduces the final price by an  extra factor of 10,000.
      */
-    uint256 public constant SCALING_FACTOR = 1e24;
+    uint256 public constant SCALING_FACTOR = 1e28;
 
     /**
      * Base price & slope, reduced from 1e5 to 1e3 to produce lower costUnits.
@@ -180,7 +180,7 @@ contract BondingCurve {
         console.log("Amount:", amount );
         console.log("Raw price:", rawPrice);
         console.log("Fee:", fee);
-        console.log("Total cost:", cost );
+        console.log("Total cost:", cost / 1e10, "ETH");
 
         // Transfer tokens
         require(ERC20(creatorToken).transfer(msg.sender, amount), "Transfer failed");
@@ -214,7 +214,7 @@ contract BondingCurve {
         console.log("Amount:", amount);
         console.log("Raw price:", rawSellPrice);
         console.log("Fee:", fee);
-        console.log("Net payout:", netSellPrice );
+        console.log("Net payout:", netSellPrice / 1e10 , "ETH" );
 
         // Payout
         payable(msg.sender).transfer(netSellPrice);
