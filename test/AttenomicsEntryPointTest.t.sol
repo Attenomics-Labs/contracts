@@ -19,8 +19,11 @@ contract AttenomicsCreatorEntryPointTest is Test {
         aiAgent = address(0x123);
         handle = keccak256(abi.encodePacked("test_creator"));
 
+        // Deploy Gaslite drop
+        GasliteDrop gasliteDrop = new GasliteDrop();
+
         // Deploy entry point
-        entryPoint = new AttenomicsCreatorEntryPoint();
+        entryPoint = new AttenomicsCreatorEntryPoint(address(gasliteDrop));
 
         // Set AI agent
         entryPoint.setAIAgent(aiAgent, true);

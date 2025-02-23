@@ -99,10 +99,7 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         );
 
         // Store the vault and supporter addresses
-        tokenVaultByHandle[config.handle] = token.getVaultAddress();
-        tokenSupporterByHandle[config.handle] = token.getSupporterAddress();
         creatorTokenByHandle[config.handle] = address(token);
-        tokenIdByCreatorToken[address(token)] = nextTokenId;
         tokenIdByHandle[config.handle] = nextTokenId;
 
         // Mint the NFT to the creator. This NFT is non-transferable.

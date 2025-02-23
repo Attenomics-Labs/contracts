@@ -102,6 +102,10 @@ contract CreatorToken is ERC20 {
         return 18;
     }
 
+    function getBondingCurveAddress() public view returns (address) {
+        return bondingCurve;
+    }
+
     // Add these getter functions
     function getVaultAddress() public view returns (address) {
         return address(selfTokenVault);
