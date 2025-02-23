@@ -5,13 +5,21 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "forge-std/console.sol";
 
 /**
- * @title Linear Bonding Curve (with logs) 
- * 
- * Key Adjustments:
- *  1) SCALING_FACTOR = 1e12 (was 1e8)
- *  2) BASE_PRICE = 1e3, SLOPE = 1e3 (were 1e5)
+ * @title BondingCurve (Single-Counter Model)
  *
- * This drastically lowers final prices when supply and amounts are large.
+ * In this implementation:
+ * - The available tokens for sale are defined by the ERC20 token balance held by this contract.
+ * - purchaseMarketSupply is the effective “sold” supply used for pricing, which starts at 0.
+ *
+ * When buying:
+ *   • The cost is computed using getPrice(purchaseMarketSupply, amount).
+ *   • purchaseMarketSupply is increased by the purchased amount.
+ *
+ * When selling:
+ *   • The payout is computed using getPrice(purchaseMarketSupply - amount, amount).
+ *   • purchaseMarketSupply is decreased by the sold amount.
+ *
+ * This decouples the pricing mechanism from the actual token balance.
  */
 contract BondingCurve {
     // ======================
@@ -32,22 +40,20 @@ contract BondingCurve {
     //   Bonding Parameters
     // ======================
     /**
-     * We normalize the token supply/amount by dividing by NORMALIZER (1e9).
-     * If your token supply is extremely large, you can increase it to 1e12.
+     * NORMALIZER: Normalizes token amounts.
+     * SCALING_FACTOR: Scales the final cost.
+     * BASE_PRICE & SLOPE: Parameters for the linear bonding curve.
      */
     uint256 public constant NORMALIZER = 1e12;
-
-    /**
-     * We multiply the final cost by (1 ether / SCALING_FACTOR).
-     * Increasing from 1e8 to 1e12 reduces the final price by an  extra factor of 10,000.
-     */
     uint256 public constant SCALING_FACTOR = 1e28;
-
-    /**
-     * Base price & slope, reduced from 1e5 to 1e3 to produce lower costUnits.
-     */
     uint256 public constant BASE_PRICE = 1e2;
     uint256 public constant SLOPE      = 1e3;
+
+    /**
+     * purchaseMarketSupply represents the effective supply used for pricing.
+     * It starts at 0 and increases as tokens are bought via the bonding curve.
+     */
+    uint256 public purchaseMarketSupply;
 
     // ======================
     //      Constructor
@@ -57,8 +63,9 @@ contract BondingCurve {
         require(_protocolFeeAddress != address(0), "Invalid fee address");
         creatorToken = _creatorToken;
         protocolFeeAddress = _protocolFeeAddress;
+        purchaseMarketSupply = 0;
 
-        // If contract is deployed with ETH, treat it as an initial buy.
+        // If deployed with ETH, perform an initial buy.
         if (msg.value > 0) {
             _initialBuy(msg.sender, msg.value);
         }
@@ -68,48 +75,39 @@ contract BondingCurve {
     //   Pricing Functions
     // ======================
     /**
-     * @notice Computes the linear cost:
-     *   1) Normalize supply & amount by dividing by NORMALIZER.
-     *   2) costUnits = A*BASE_PRICE + SLOPE*(S*A + A*(A-1)/2).
-     *   3) finalWei = costUnits * (1 ether / SCALING_FACTOR).
+     * @notice Calculates the cost to add `amount` tokens on top of an effective supply.
+     * The formula is:
+     *   costUnits = normAmount * BASE_PRICE + SLOPE * (normSupply * normAmount + (normAmount*(normAmount-1))/2)
+     * where normSupply and normAmount are normalized by NORMALIZER.
+     * The final cost (in wei) is: (costUnits * 1 ether) / SCALING_FACTOR.
      */
-    function getPrice(uint256 supply, uint256 amount) public pure returns (uint256) {
-        // 1) normalize
-        uint256 normSupply = supply / NORMALIZER;
+    function getPrice(uint256 effectiveSupply, uint256 amount) public pure returns (uint256) {
+        uint256 normSupply = effectiveSupply / NORMALIZER;
         uint256 normAmount = amount / NORMALIZER;
-
-        // 2) linear cost in “units”
         uint256 costUnits = normAmount * BASE_PRICE
-            + SLOPE * (
-                normSupply * normAmount
-                + (normAmount * (normAmount - 1)) / 2
-            );
-
-        // 3) scale to wei
+            + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
         return (costUnits * 1 ether) / SCALING_FACTOR;
     }
 
-    /// @dev Buy price (no fees).
+    /// @dev Returns the buy price (without fees) based on the current effective supply.
     function getBuyPrice(uint256 amount) public view returns (uint256) {
-        uint256 supply = ERC20(creatorToken).balanceOf(address(this));
-        return getPrice(supply, amount);
+        return getPrice(purchaseMarketSupply, amount);
     }
 
-    /// @dev Sell price (no fees).
+    /// @dev Returns the sell price (without fees) based on reducing the effective supply.
     function getSellPrice(uint256 amount) public view returns (uint256) {
-        uint256 supply = ERC20(creatorToken).balanceOf(address(this));
-        require(supply >= amount, "Insufficient supply");
-        return getPrice(supply - amount, amount);
+        require(purchaseMarketSupply >= amount, "Insufficient effective supply");
+        return getPrice(purchaseMarketSupply - amount, amount);
     }
 
-    /// @dev Buy price + 0.5% fee.
+    /// @dev Returns the buy price including a fee.
     function getBuyPriceAfterFees(uint256 amount) public view returns (uint256) {
         uint256 rawPrice = getBuyPrice(amount);
         uint256 fee = (rawPrice * buyFeePercent) / feePrecision;
         return rawPrice + fee;
     }
 
-    /// @dev Sell price - 1% fee.
+    /// @dev Returns the sell price after subtracting a fee.
     function getSellPriceAfterFees(uint256 amount) public view returns (uint256) {
         uint256 rawPrice = getSellPrice(amount);
         uint256 fee = (rawPrice * sellFeePercent) / feePrecision;
@@ -117,15 +115,15 @@ contract BondingCurve {
     }
 
     // ======================
-    //     Buy / Sell
+    //   Buy / Sell Routines
     // ======================
-
     /**
-     * @notice Approximates how many tokens can be purchased with `ethAmount` (including the 0.5% fee)
-     *         using a binary search.
+     * @notice Approximates the number of tokens that can be purchased with `ethAmount`
+     *         via a binary search, then executes the initial buy.
      */
     function _initialBuy(address buyer, uint256 ethAmount) internal {
         uint256 low = 0;
+        // Use a rough high-bound estimate
         uint256 high = (ethAmount / 1e9) * 2;
         for (uint256 i = 0; i < 20; i++) {
             uint256 mid = (low + high) / 2;
@@ -138,14 +136,13 @@ contract BondingCurve {
         }
         uint256 tokensToBuy = low;
         require(tokensToBuy > 0, "No tokens for initial buy");
+        require(tokensToBuy <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
 
-        // compute final cost and fee
         uint256 rawPrice = getBuyPrice(tokensToBuy);
         uint256 totalCost = getBuyPriceAfterFees(tokensToBuy);
         uint256 fee = totalCost - rawPrice;
         lifetimeProtocolFees += fee;
 
-        // LOG some data for debugging
         console.log("=== Initial Buy ===");
         console.log("Buyer:", buyer);
         console.log("Tokens to buy:", tokensToBuy);
@@ -153,10 +150,11 @@ contract BondingCurve {
         console.log("Fee:", fee);
         console.log("Total cost:", totalCost);
 
-        // transfer tokens
-        ERC20(creatorToken).transfer(buyer, tokensToBuy);
+        // Update effective supply and transfer tokens.
+        purchaseMarketSupply += tokensToBuy;
+        require(ERC20(creatorToken).transfer(buyer, tokensToBuy), "Transfer failed");
 
-        // refund leftover
+        // Refund any leftover ETH.
         uint256 refund = ethAmount - totalCost;
         if (refund > 0) {
             payable(buyer).transfer(refund);
@@ -164,9 +162,16 @@ contract BondingCurve {
     }
 
     /**
-     * @notice Buys `amount` tokens from the curve.
+     * @notice Buys `amount` tokens.
+     * Requirements:
+     *   - The amount must be greater than 0.
+     *   - The ERC20 token balance of the contract (available tokens) must be at least `amount`.
+     *   - The ETH sent must cover the cost (including fee).
      */
     function buy(uint256 amount) external payable {
+        require(amount > 0, "Amount must be > 0");
+        require(amount <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
+
         uint256 cost = getBuyPriceAfterFees(amount);
         require(msg.value >= cost, "Insufficient ETH for buy");
 
@@ -174,18 +179,20 @@ contract BondingCurve {
         uint256 fee = cost - rawPrice;
         lifetimeProtocolFees += fee;
 
-        // LOG the buy details
         console.log("=== Buy ===");
         console.log("Buyer:", msg.sender);
-        console.log("Amount:", amount );
+        console.log("Amount:", amount);
         console.log("Raw price:", rawPrice);
         console.log("Fee:", fee);
-        console.log("Total cost:", cost / 1e10, "ETH");
+        console.log("Total cost:", cost);
 
-        // Transfer tokens
-        require(ERC20(creatorToken).transfer(msg.sender, amount), "Transfer failed");
+        // Increase effective supply for pricing.
+        purchaseMarketSupply += amount;
 
-        // Refund leftover
+        // Transfer tokens from this contract to the buyer.
+        require(ERC20(creatorToken).transfer(msg.sender, amount), "Token transfer failed");
+
+        // Refund any extra ETH.
         if (msg.value > cost) {
             payable(msg.sender).transfer(msg.value - cost);
         }
@@ -193,47 +200,59 @@ contract BondingCurve {
 
     /**
      * @notice Sells `amount` tokens back to the curve.
+     * Requirements:
+     *   - The seller must hold at least `amount` tokens.
+     *   - The effective supply must be at least `amount`.
+     *
+     * On sell, the effective supply is reduced and the tokens are returned to the contract.
      */
     function sell(uint256 amount) external {
+        require(amount > 0, "Amount must be > 0");
         ERC20 token = ERC20(creatorToken);
-        require(token.balanceOf(msg.sender) >= amount, "Not enough tokens");
-
-        require(token.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+        require(token.balanceOf(msg.sender) >= amount, "Not enough tokens to sell");
+        require(token.transferFrom(msg.sender, address(this), amount), "Token transfer failed");
 
         uint256 rawSellPrice = getSellPrice(amount);
         uint256 fee = (rawSellPrice * sellFeePercent) / feePrecision;
         uint256 netSellPrice = rawSellPrice - fee;
         lifetimeProtocolFees += fee;
 
-        // Ensure enough ETH
-        require(address(this).balance >= netSellPrice, "Not enough ETH in curve");
-
-        // LOG the sell details
         console.log("=== Sell ===");
         console.log("Seller:", msg.sender);
         console.log("Amount:", amount);
         console.log("Raw price:", rawSellPrice);
         console.log("Fee:", fee);
-        console.log("Net payout:", netSellPrice / 1e10 , "ETH" );
+        console.log("Net payout:", netSellPrice);
 
-        // Payout
+        // Decrease the effective supply.
+        require(purchaseMarketSupply >= amount, "Effective supply underflow");
+        purchaseMarketSupply -= amount;
+
+        require(address(this).balance >= netSellPrice, "Not enough ETH in curve");
         payable(msg.sender).transfer(netSellPrice);
     }
 
     // ======================
     //   Liquidity & Fees
     // ======================
+    /**
+     * @notice Allows anyone to deposit tokens to the bonding curve (increasing available tokens).
+     */
     function provideLiquidity(uint256 amount) external {
-        require(ERC20(creatorToken).transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+        require(ERC20(creatorToken).transferFrom(msg.sender, address(this), amount), "Token transfer failed");
     }
 
+    /**
+     * @notice Withdraws collected ETH fees to the protocol fee address.
+     */
     function withdrawFees() external {
-        require(msg.sender == protocolFeeAddress, "Not fee address");
+        require(msg.sender == protocolFeeAddress, "Caller is not fee address");
         uint256 bal = address(this).balance;
         require(bal > 0, "No ETH to withdraw");
         payable(protocolFeeAddress).transfer(bal);
     }
 
+    // Accept ETH deposits.
     receive() external payable {}
     fallback() external payable {}
 }

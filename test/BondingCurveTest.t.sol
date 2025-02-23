@@ -126,11 +126,10 @@ contract BondingCurveTest is Test {
 
         // We should have more ETH than before
         assertTrue(afterEth > beforeEth);
-
-
     }
 
-       function testBuyAndSellOneMil() public {
+       function testBuyAndSellOneMil() public { 
+        // 0.0502499999999598ether =  140.77$
         uint256 buyAmount = 1000000 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
 
@@ -152,8 +151,9 @@ contract BondingCurveTest is Test {
         // We should have more ETH than before
         assertTrue(afterEth > beforeEth);
 
-
-    }
+        // 49499999999960400 
+        // 0.0494999999999604 ether = 138.77$
+    }   
 
     function testProvideLiquidity() public {
         uint256 initialBal = token.balanceOf(address(bondingCurve));
