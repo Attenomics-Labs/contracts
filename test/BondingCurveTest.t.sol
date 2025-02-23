@@ -14,7 +14,7 @@ contract BondingCurveTest is Test {
         address(0x1234567890123456789012345678901234567890);
 
     // Mint 10,000,000 tokens of 18 decimals (for testing liquidity)
-    uint256 public constant INITIAL_SUPPLY = 10000000000 * 1e18;
+    uint256 public constant INITIAL_SUPPLY = 1_000_000_000_000 * 1e18; // 1000 billion
 
     function setUp() public {
         // Deploy the test token and the bonding curve
@@ -299,8 +299,8 @@ contract BondingCurveTest is Test {
     /// @notice Test multiple consecutive buys.
     function testMultipleConsecutiveBuys() public {
         uint256 totalBuy = 0;
-        for (uint256 i = 0; i < 5; i++) {
-            uint256 buyAmount = 50000 * 1e18;
+        for (uint256 i = 0; i < 100; i++) {
+            uint256 buyAmount = 500000 * 1e18;
             uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
             vm.deal(address(this), cost);
             bondingCurve.buy{value: cost}(buyAmount);
