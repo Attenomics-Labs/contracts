@@ -20,6 +20,8 @@ import "forge-std/console.sol";
  *   • purchaseMarketSupply is decreased by the sold amount.
  *
  * This decouples the pricing mechanism from the actual token balance.
+ *
+ * Additionally, we log the ETH amounts and their dollar equivalent using a conversion factor of 1 ETH = $3000.
  */
 contract BondingCurve {
     // ======================
@@ -146,9 +148,12 @@ contract BondingCurve {
         console.log("=== Initial Buy ===");
         console.log("Buyer:", buyer);
         console.log("Tokens to buy:", tokensToBuy);
-        console.log("Raw price:", rawPrice);
-        console.log("Fee:", fee);
-        console.log("Total cost:", totalCost);
+        console.log("Raw price (wei):", rawPrice);
+        console.log("Fee (wei):", fee);
+        console.log("Total cost (wei):", totalCost);
+        // Calculate and log dollar equivalent assuming 1 ETH = $3000.
+        uint256 totalCostDollars = (totalCost * 3000) / 1e18;
+        console.log("Total cost ($):", totalCostDollars);
 
         // Update effective supply and transfer tokens.
         purchaseMarketSupply += tokensToBuy;
@@ -182,9 +187,12 @@ contract BondingCurve {
         console.log("=== Buy ===");
         console.log("Buyer:", msg.sender);
         console.log("Amount:", amount);
-        console.log("Raw price:", rawPrice);
-        console.log("Fee:", fee);
-        console.log("Total cost:", cost);
+        console.log("Raw price (wei):", rawPrice);
+        console.log("Fee (wei):", fee);
+        console.log("Total cost (wei):", cost);
+        // Log dollar equivalent.
+        uint256 costDollars = (cost * 3000) / 1e18;
+        console.log("Total cost ($):", costDollars);
 
         // Increase effective supply for pricing.
         purchaseMarketSupply += amount;
@@ -220,9 +228,12 @@ contract BondingCurve {
         console.log("=== Sell ===");
         console.log("Seller:", msg.sender);
         console.log("Amount:", amount);
-        console.log("Raw price:", rawSellPrice);
-        console.log("Fee:", fee);
-        console.log("Net payout:", netSellPrice);
+        console.log("Raw price (wei):", rawSellPrice);
+        console.log("Fee (wei):", fee);
+        console.log("Net payout (wei):", netSellPrice);
+        // Log dollar equivalent.
+        uint256 netSellPriceDollars = (netSellPrice * 3000) / 1e18;
+        console.log("Net payout ($):", netSellPriceDollars);
 
         // Decrease the effective supply.
         require(purchaseMarketSupply >= amount, "Effective supply underflow");
