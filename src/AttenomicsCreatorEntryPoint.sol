@@ -29,7 +29,7 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     mapping(bytes32 => address) public creatorTokenByHandle;
 
     // Mapping from CreatorToken contract address to NFT tokenId.
-    // mapping(address => uint256) public tokenIdByCreatorToken;
+    mapping(address => uint256) public tokenIdByCreatorToken;
 
     // Mapping from hashed Twitter/X handle to NFT tokenId.
     mapping(bytes32 => uint256) public tokenIdByHandle;
