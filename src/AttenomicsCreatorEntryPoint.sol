@@ -13,6 +13,7 @@ import {GasliteDrop} from "./GasliteDrop.sol";
 error NonTransferableNFT();
 error HandleAlreadyUsed();
 error AIAgentNotAllowed();
+error InvalidGasliteDropAddress();
 /**
  * @title AttenomicsCreatorEntryPoint
  * @notice This contract acts as a single, reliable onboarding entry point.
@@ -28,21 +29,17 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     mapping(bytes32 => address) public creatorTokenByHandle;
 
     // Mapping from CreatorToken contract address to NFT tokenId.
-    mapping(address => uint256) public tokenIdByCreatorToken;
+    // mapping(address => uint256) public tokenIdByCreatorToken;
 
     // Mapping from hashed Twitter/X handle to NFT tokenId.
     mapping(bytes32 => uint256) public tokenIdByHandle;
 
     uint256 public nextTokenId;
 
-    address gasliteDropAddress;
+    address public gasliteDropAddress;
 
     // Mapping of allowed AI agents.
     mapping(address => bool) public allowedAIAgents;
-
-    // Add these mappings near the other state variables
-    mapping(bytes32 => address) public tokenVaultByHandle;
-    mapping(bytes32 => address) public tokenSupporterByHandle;
 
     event AIAgentUpdated(address agent, bool allowed);
     event CreatorTokenDeployed(
@@ -53,6 +50,7 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     );
 
     constructor(address _gasliteDropAddress) ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
+        if (_gasliteDropAddress == address(0)) revert InvalidGasliteDropAddress();
         gasliteDropAddress = _gasliteDropAddress;
     }
 
