@@ -10,9 +10,10 @@ contract BondingCurveTest is Test {
     TestToken public token;
 
     // We'll designate a protocol fee address.
-    address public protocolFeeAddress = address(0x1234567890123456789012345678901234567890);
+    address public protocolFeeAddress =
+        address(0x1234567890123456789012345678901234567890);
 
-    // Mint 1,000,000 tokens of 18 decimals
+    // Mint 10,000,000 tokens of 18 decimals (for testing liquidity)
     uint256 public constant INITIAL_SUPPLY = 10000000000 * 1e18;
 
     function setUp() public {
@@ -20,60 +21,62 @@ contract BondingCurveTest is Test {
         token = new TestToken(INITIAL_SUPPLY);
         bondingCurve = new BondingCurve(address(token), protocolFeeAddress);
 
-        // Transfer some tokens to the curve as initial liquidity (e.g., 800k tokens).
+        // Transfer some tokens to the curve as initial liquidity (e.g., 80,000,000 tokens).
+        // (Adjust these numbers if needed to ensure sufficient liquidity.)
         token.transfer(address(bondingCurve), 80000000 * 1e18);
     }
 
     function testInitialSetup() public {
         assertEq(bondingCurve.creatorToken(), address(token));
         assertEq(bondingCurve.protocolFeeAddress(), protocolFeeAddress);
-        assertEq(bondingCurve.buyFeePercent(), 50);    // 0.5%
-        assertEq(bondingCurve.sellFeePercent(), 100);  // 1%
+        assertEq(bondingCurve.buyFeePercent(), 50); // 0.5%
+        assertEq(bondingCurve.sellFeePercent(), 100); // 1%
     }
 
     function testGetPrice() public {
-        // We'll test the linear formula for a hypothetical supply = 1000 tokens, amount = 100 tokens
-        // in raw wei terms, that's 1000e18, 100e18.
+        // Test the linear formula for a hypothetical supply = 1000 tokens, amount = 100 tokens.
         uint256 supply = 1000 * 1e18;
         uint256 amount = 100 * 1e18;
 
-        // We'll replicate the formula:
-        //  1) normS = supply/1e9, normA = amount/1e9
-        //  2) costUnits = normA*BASE_PRICE + SLOPE*(normS*normA + normA*(normA-1)/2)
-        //  3) final = costUnits*(1 ether / SCALING_FACTOR)
-        // We'll do this same calculation in the test and compare to getPrice(supply, amount).
+        // Replicate the formula:
+        // 1) normS = supply / NORMALIZER, normA = amount / NORMALIZER.
+        // 2) costUnits = normA * BASE_PRICE + SLOPE * (normS * normA + (normA * (normA - 1)) / 2).
+        // 3) final cost = costUnits * (1 ether / SCALING_FACTOR).
         uint256 normS = supply / bondingCurve.NORMALIZER();
         uint256 normA = amount / bondingCurve.NORMALIZER();
-        uint256 costUnits = normA * bondingCurve.BASE_PRICE()
-            + bondingCurve.SLOPE() * (
-                normS * normA + (normA * (normA - 1)) / 2
-            );
-        uint256 expected = (costUnits * 1 ether) / bondingCurve.SCALING_FACTOR();
+        uint256 costUnits = normA *
+            bondingCurve.BASE_PRICE() +
+            bondingCurve.SLOPE() *
+            (normS * normA + (normA * (normA - 1)) / 2);
+        uint256 expected = (costUnits * 1 ether) /
+            bondingCurve.SCALING_FACTOR();
         uint256 actual = bondingCurve.getPrice(supply, amount);
 
         assertEq(actual, expected);
     }
 
     function testBuyPricing() public {
-        // Check that getBuyPriceAfterFees = getBuyPrice(...) + 0.5%
+        // Check that getBuyPriceAfterFees = getBuyPrice(...) + 0.5% fee.
         uint256 amount = 100 * 1e18;
         uint256 rawPrice = bondingCurve.getBuyPrice(amount);
-        uint256 expectedFee = (rawPrice * bondingCurve.buyFeePercent()) / bondingCurve.feePrecision();
+        uint256 expectedFee = (rawPrice * bondingCurve.buyFeePercent()) /
+            bondingCurve.feePrecision();
         uint256 actualBuyPrice = bondingCurve.getBuyPriceAfterFees(amount);
         assertEq(actualBuyPrice, rawPrice + expectedFee);
     }
 
     function testSellPricing() public {
-        // We'll buy tokens first so that the supply is effectively changed.
+        // First, buy tokens so that the effective supply is nonzero.
         uint256 buyAmount = 1000 * 1e18;
         uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
         vm.deal(address(this), cost);
         bondingCurve.buy{value: cost}(buyAmount);
 
-        // Now we check the rawSellPrice and priceAfterFees for some subset
+        // Now check the sell pricing.
         uint256 sellAmount = 100 * 1e18;
         uint256 rawPrice = bondingCurve.getSellPrice(sellAmount);
-        uint256 fee = (rawPrice * bondingCurve.sellFeePercent()) / bondingCurve.feePrecision();
+        uint256 fee = (rawPrice * bondingCurve.sellFeePercent()) /
+            bondingCurve.feePrecision();
         uint256 afterFee = rawPrice - fee;
 
         assertEq(bondingCurve.getSellPriceAfterFees(sellAmount), afterFee);
@@ -83,82 +86,64 @@ contract BondingCurveTest is Test {
         uint256 buyAmount = 100 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
 
-        // Provide the ETH and buy
+        // Provide ETH and buy tokens.
         vm.deal(address(this), buyCost);
         uint256 beforeBal = token.balanceOf(address(this));
         bondingCurve.buy{value: buyCost}(buyAmount);
 
-        // Check we received tokens
+        // Check that tokens were received.
         assertEq(token.balanceOf(address(this)) - beforeBal, buyAmount);
 
-        // Approve and sell
+        // Approve and sell tokens.
         token.approve(address(bondingCurve), buyAmount);
         uint256 beforeEth = address(this).balance;
-        beforeBal = token.balanceOf(address(this));
         bondingCurve.sell(buyAmount);
         uint256 afterEth = address(this).balance;
 
-        // We should have more ETH than before
+        // Expect an increase in ETH (though fees ensure a round-trip loss).
         assertTrue(afterEth > beforeEth);
-
-
     }
-
 
     function testBuyAndSellOneK() public {
         uint256 buyAmount = 1000 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
 
-        // Provide the ETH and buy
         vm.deal(address(this), buyCost);
         uint256 beforeBal = token.balanceOf(address(this));
         bondingCurve.buy{value: buyCost}(buyAmount);
 
-        // Check we received tokens
         assertEq(token.balanceOf(address(this)) - beforeBal, buyAmount);
 
-        // Approve and sell
         token.approve(address(bondingCurve), buyAmount);
         uint256 beforeEth = address(this).balance;
-        beforeBal = token.balanceOf(address(this));
         bondingCurve.sell(buyAmount);
         uint256 afterEth = address(this).balance;
 
-        // We should have more ETH than before
         assertTrue(afterEth > beforeEth);
     }
 
-       function testBuyAndSellOneMil() public { 
-        // 0.0502499999999598ether =  140.77$
+    function testBuyAndSellOneMil() public {
         uint256 buyAmount = 1000000 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
 
-        // Provide the ETH and buy
         vm.deal(address(this), buyCost);
         uint256 beforeBal = token.balanceOf(address(this));
         bondingCurve.buy{value: buyCost}(buyAmount);
 
-        // Check we received tokens
         assertEq(token.balanceOf(address(this)) - beforeBal, buyAmount);
 
-        // Approve and sell
         token.approve(address(bondingCurve), buyAmount);
         uint256 beforeEth = address(this).balance;
-        beforeBal = token.balanceOf(address(this));
         bondingCurve.sell(buyAmount);
         uint256 afterEth = address(this).balance;
 
-        // We should have more ETH than before
         assertTrue(afterEth > beforeEth);
-
-        // 49499999999960400 
-        // 0.0494999999999604 ether = 138.77$
-    }   
+    }
 
     function testProvideLiquidity() public {
         uint256 initialBal = token.balanceOf(address(bondingCurve));
 
-        // We'll provide extra 1000 tokens
+        // Provide extra 1000 tokens.
         uint256 addAmount = 1000 * 1e18;
         token.transfer(address(this), addAmount);
         token.approve(address(bondingCurve), addAmount);
@@ -169,31 +154,185 @@ contract BondingCurveTest is Test {
     }
 
     function testWithdrawFees() public {
-        // We'll do a buy to generate fees
+        // Do a buy to generate fees.
         uint256 amt = 1000 * 1e18;
         uint256 price = bondingCurve.getBuyPriceAfterFees(amt);
         vm.deal(address(this), price);
         bondingCurve.buy{value: price}(amt);
 
-        // The curve has accumulated fees
         assertTrue(bondingCurve.lifetimeProtocolFees() > 0);
 
-        // Withdraw fees from the protocol fee address
         uint256 preBal = protocolFeeAddress.balance;
-        vm.deal(protocolFeeAddress, 10 ether); // just to fund gas
+        vm.deal(protocolFeeAddress, 10 ether); // Fund fee address for gas.
         vm.prank(protocolFeeAddress);
         bondingCurve.withdrawFees();
         uint256 postBal = protocolFeeAddress.balance;
 
-        // We expect the protocol fee address to have gained some ETH
         assertTrue(postBal > preBal);
+    }
+
+    // ======================
+    //   Additional Test Cases
+    // ======================
+
+    /// @notice Test buying 10K tokens when the effective supply is still at 0.
+    function testBuy10KTokens() public {
+        uint256 buyAmount = 10000 * 1e18;
+        uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+        vm.deal(address(this), buyCost);
+
+        uint256 initialEffectiveSupply = bondingCurve.purchaseMarketSupply();
+        uint256 initialCurveTokenBal = token.balanceOf(address(bondingCurve));
+
+        bondingCurve.buy{value: buyCost}(buyAmount);
+
+        uint256 finalEffectiveSupply = bondingCurve.purchaseMarketSupply();
+        uint256 finalCurveTokenBal = token.balanceOf(address(bondingCurve));
+
+        // Effective supply should increase by exactly buyAmount.
+        assertEq(finalEffectiveSupply - initialEffectiveSupply, buyAmount);
+        // The bonding curve's token balance should decrease by buyAmount.
+        assertEq(initialCurveTokenBal - finalCurveTokenBal, buyAmount);
+    }
+
+    /// @notice Test the cost to buy 10K tokens after 1M tokens have been purchased.
+    function testBuy10KAfter1MBuy() public {
+        // First, buy 1M tokens.
+        uint256 buyAmount1M = 1000000 * 1e18;
+        uint256 cost1M = bondingCurve.getBuyPriceAfterFees(buyAmount1M);
+        vm.deal(address(this), cost1M);
+        bondingCurve.buy{value: cost1M}(buyAmount1M);
+        uint256 effectiveSupplyAfter1M = bondingCurve.purchaseMarketSupply();
+        assertEq(effectiveSupplyAfter1M, buyAmount1M);
+
+        // Now, get cost to buy an additional 10K tokens.
+        uint256 buyAmount10K = 10000 * 1e18;
+        uint256 cost10KAfter = bondingCurve.getBuyPriceAfterFees(buyAmount10K);
+
+        // Calculate what 10K tokens would cost at an effective supply of 0.
+        uint256 initialCostFor10K = bondingCurve.getPrice(0, buyAmount10K);
+        uint256 initialCostFor10KAfterFees = initialCostFor10K +
+            (initialCostFor10K * bondingCurve.buyFeePercent()) /
+            bondingCurve.feePrecision();
+
+        // The cost after 1M tokens should be higher than the initial cost.
+        assertTrue(cost10KAfter > initialCostFor10KAfterFees);
+
+        // Buy the additional 10K tokens.
+        vm.deal(address(this), cost10KAfter);
+        bondingCurve.buy{value: cost10KAfter}(buyAmount10K);
+
+        uint256 newEffectiveSupply = bondingCurve.purchaseMarketSupply();
+        assertEq(newEffectiveSupply, buyAmount1M + buyAmount10K);
+    }
+
+    /// @notice Simulate a profit scenario:
+    /// Buyer A buys 10K tokens after 1M tokens have been purchased.
+    /// Then Buyer B buys an extra 100K tokens to push the price higher.
+    /// Buyer A then sells their 10K tokens. We log the difference.
+    function testProfitScenario() public {
+        // Step 1: Set up the curve with 1M tokens bought.
+        uint256 buyAmount1M = 1000000 * 1e18;
+        uint256 cost1M = bondingCurve.getBuyPriceAfterFees(buyAmount1M);
+        vm.deal(address(this), cost1M);
+        bondingCurve.buy{value: cost1M}(buyAmount1M);
+
+        // Step 2: Buyer A buys 10K tokens.
+        address buyerA = address(0xABCD);
+        uint256 buyAmount10K = 10000 * 1e18;
+        uint256 cost10K = bondingCurve.getBuyPriceAfterFees(buyAmount10K);
+        vm.deal(buyerA, cost10K);
+        vm.prank(buyerA);
+        bondingCurve.buy{value: cost10K}(buyAmount10K);
+
+        // Record effective supply after Buyer A's purchase.
+        uint256 effectiveSupplyAfterA = bondingCurve.purchaseMarketSupply();
+
+        // Step 3: Buyer B buys 100K tokens to push the curve.
+        address buyerB = address(0xBEEF);
+        uint256 buyAmount100K = 100000 * 1e18;
+        uint256 cost100K = bondingCurve.getBuyPriceAfterFees(buyAmount100K);
+        vm.deal(buyerB, cost100K);
+        vm.prank(buyerB);
+        bondingCurve.buy{value: cost100K}(buyAmount100K);
+
+        // Step 4: Buyer A sells their 10K tokens.
+        vm.prank(buyerA);
+        TestToken(token).approve(address(bondingCurve), buyAmount10K);
+        uint256 sellPayout = bondingCurve.getSellPriceAfterFees(buyAmount10K);
+        uint256 balanceBeforeSell = buyerA.balance;
+        vm.prank(buyerA);
+        bondingCurve.sell(buyAmount10K);
+        uint256 balanceAfterSell = buyerA.balance;
+
+        // Calculate profit (note: with fees, a round-trip may still be negative).
+        int256 profit = int256(sellPayout) - int256(cost10K);
+        console.log(
+            "Buyer A profit (wei):",
+            uint256(profit < 0 ? int256(0) : profit)
+        );
+    }
+
+    /// @notice Run a random buy–sell sequence over several iterations.
+    function testRandomBuySellSequence() public {
+        uint256 iterations = 10;
+        uint256 netBought = 0;
+        for (uint256 i = 0; i < iterations; i++) {
+            // Simulate a buy amount increasing with each iteration.
+            uint256 buyAmount = (i + 1) * 1000 * 1e18;
+            uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+            vm.deal(address(this), cost);
+            bondingCurve.buy{value: cost}(buyAmount);
+            netBought += buyAmount;
+            // Every even iteration, sell half of the tokens bought in this iteration.
+            if (i % 2 == 0) {
+                uint256 sellAmount = buyAmount / 2;
+                token.approve(address(bondingCurve), sellAmount);
+                bondingCurve.sell(sellAmount);
+                netBought -= sellAmount;
+            }
+        }
+        // The effective supply should equal net tokens bought.
+        assertEq(bondingCurve.purchaseMarketSupply(), netBought);
+    }
+
+    /// @notice Test multiple consecutive buys.
+    function testMultipleConsecutiveBuys() public {
+        uint256 totalBuy = 0;
+        for (uint256 i = 0; i < 5; i++) {
+            uint256 buyAmount = 50000 * 1e18;
+            uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+            vm.deal(address(this), cost);
+            bondingCurve.buy{value: cost}(buyAmount);
+            totalBuy += buyAmount;
+            assertEq(bondingCurve.purchaseMarketSupply(), totalBuy);
+        }
+    }
+
+    /// @notice Test multiple consecutive sells.
+    function testMultipleConsecutiveSells() public {
+        // Buy 20000 tokens.
+        uint256 buyAmount = 20000 * 1e18;
+        uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+        vm.deal(address(this), cost);
+        bondingCurve.buy{value: cost}(buyAmount);
+        assertEq(bondingCurve.purchaseMarketSupply(), buyAmount);
+
+        // Sell in two parts (10000 tokens each).
+        uint256 sellAmount = 10000 * 1e18;
+        token.approve(address(bondingCurve), sellAmount);
+        bondingCurve.sell(sellAmount);
+        assertEq(bondingCurve.purchaseMarketSupply(), buyAmount - sellAmount);
+
+        token.approve(address(bondingCurve), sellAmount);
+        bondingCurve.sell(sellAmount);
+        assertEq(bondingCurve.purchaseMarketSupply(), 0);
     }
 
     // ======================
     //   Failure Tests
     // ======================
     function testFailInsufficientEthForBuy() public {
-        // If we pass 1 wei less than required, we revert
         uint256 amt = 100 * 1e18;
         uint256 cost = bondingCurve.getBuyPriceAfterFees(amt);
         vm.deal(address(this), cost - 1);
@@ -201,7 +340,6 @@ contract BondingCurveTest is Test {
     }
 
     function testFailInsufficientTokensForSell() public {
-        // Attempt to sell tokens we don't have
         bondingCurve.sell(100 * 1e18);
     }
 
