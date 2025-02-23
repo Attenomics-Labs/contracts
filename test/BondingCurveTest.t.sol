@@ -3,174 +3,126 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/BondingCurve.sol";
-import "../src/CreatorToken.sol";
-
+import "./TestToken.sol";
 contract BondingCurveTest is Test {
     BondingCurve public bondingCurve;
-    CreatorToken public token;
-    address public protocolFeeAddress;
+    TestToken public token;
+    // Example protocol fee address.
+    address public protocolFeeAddress = address(0x1234567890123456789012345678901234567890);
+    // Mint 1,000,000 tokens (with 18 decimals)
     uint256 public constant INITIAL_SUPPLY = 1_000_000 * 1e18;
 
     function setUp() public {
-        protocolFeeAddress = 0xE2B48E911562a221619533a5463975Fdd92E7fC7;
-
-        CreatorToken.TokenConfig memory config = CreatorToken.TokenConfig({
-            totalSupply: INITIAL_SUPPLY,
-            selfPercent: 10,
-            marketPercent: 80,
-            supporterPercent: 10,
-            handle: keccak256(abi.encodePacked("test")),
-            aiAgent: address(this)
-        });
-
-        // Create proper distributor config
-        CreatorTokenSupporter.DistributorConfig memory distributorConfig = CreatorTokenSupporter.DistributorConfig({
-            dailyDripAmount: 1000 * 1e18,
-            dripInterval: 1 days,
-            totalDays: 100
-        });
-
-        // Create proper vault config
-        SelfTokenVault.VaultConfig memory vaultConfig = SelfTokenVault.VaultConfig({
-            dripPercentage: 10,
-            dripInterval: 30 days,
-            lockTime: 180 days,
-            lockedPercentage: 80
-        });
-
-        token = new CreatorToken(
-            "Test Token",
-            "TEST",
-            abi.encode(config),
-            abi.encode(distributorConfig),
-            abi.encode(vaultConfig),
-            address(this),
-            address(0)
-        );
-
-        bondingCurve = BondingCurve(payable(token.getBondingCurveAddress()));
+        token = new TestToken(INITIAL_SUPPLY);
+        bondingCurve = new BondingCurve(address(token), protocolFeeAddress);
+        // Transfer 800,000 tokens to the BondingCurve contract as liquidity.
+        token.transfer(address(bondingCurve), 800_000 * 1e18);
     }
 
-    function testInitialSetup() public view {
-        assertEq(address(bondingCurve.creatorToken()), address(token));
+    function testInitialSetup() public {
+        assertEq(bondingCurve.creatorToken(), address(token));
         assertEq(bondingCurve.protocolFeeAddress(), protocolFeeAddress);
-        assertEq(bondingCurve.buyFeePercent(), 50); // 0.5%
-        assertEq(bondingCurve.sellFeePercent(), 100); // 1%
+        assertEq(bondingCurve.buyFeePercent(), 50);
+        assertEq(bondingCurve.sellFeePercent(), 100);
     }
 
-    // Updated testGetPrice using the new formula order
-    function testGetPrice() public view {
+    function testGetPrice() public {
+        // Use raw token amounts (with 18 decimals)
         uint256 supply = 1000 * 1e18;
         uint256 amount = 100 * 1e18;
-
+        // Normalize the values.
+        uint256 normSupply = supply / 1e18; // 1000
+        uint256 normAmount = amount / 1e18;   // 100
+        uint256 sum1 = normSupply == 0 ? 0 : ((normSupply - 1) * normSupply * (2 * (normSupply - 1) + 1)) / 6;
+        uint256 sum2 = (normSupply + normAmount - 1) * (normSupply + normAmount) * (2 * (normSupply + normAmount - 1) + 1) / 6;
+        uint256 summation = sum2 - sum1;
+        uint256 expectedPrice = (summation * 1 ether) / 16000;
         uint256 price = bondingCurve.getPrice(supply, amount);
-
-        uint256 sum1 = supply == 0 ? 0 : ((supply - 1) * supply * (2 * (supply - 1) + 1)) / 6;
-        uint256 sum2 = ((supply + amount - 1) * (supply + amount) * (2 * (supply + amount - 1) + 1)) / 6;
-        uint256 expectedSummation = sum2 - sum1;
-        uint256 expectedPrice = (expectedSummation / 16000) * 1 ether;
-
         assertEq(price, expectedPrice);
     }
 
-    function testBuyPricing() public view {
+    function testBuyPricing() public {
         uint256 amount = 100 * 1e18;
-
         uint256 rawPrice = bondingCurve.getBuyPrice(amount);
         uint256 priceWithFees = bondingCurve.getBuyPriceAfterFees(amount);
-
-        // Check fee calculation
-        uint256 expectedFee = (rawPrice * bondingCurve.buyFeePercent()) / bondingCurve.feePrecision();
-        assertEq(priceWithFees, rawPrice + expectedFee);
+        uint256 fee = (rawPrice * bondingCurve.buyFeePercent()) / bondingCurve.feePrecision();
+        assertEq(priceWithFees, rawPrice + fee);
     }
 
     function testSellPricing() public {
-        // First buy some tokens to have supply
+        // First simulate a buy to add liquidity and update the supply.
         uint256 buyAmount = 1000 * 1e18;
         uint256 buyPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
-
-        hoax(address(this), buyPrice);
+        vm.deal(address(this), buyPrice);
         bondingCurve.buy{value: buyPrice}(buyAmount);
-
-        // Now test sell pricing
+        
+        // Now test sell pricing.
         uint256 sellAmount = 100 * 1e18;
         uint256 rawSellPrice = bondingCurve.getSellPrice(sellAmount);
-        uint256 priceWithFees = bondingCurve.getSellPriceAfterFees(sellAmount);
-
-        // Check fee calculation
-        uint256 expectedFee = (rawSellPrice * bondingCurve.sellFeePercent()) / bondingCurve.feePrecision();
-        assertEq(priceWithFees, rawSellPrice - expectedFee);
+        uint256 sellPriceWithFees = bondingCurve.getSellPriceAfterFees(sellAmount);
+        uint256 fee = (rawSellPrice * bondingCurve.sellFeePercent()) / bondingCurve.feePrecision();
+        assertEq(sellPriceWithFees, rawSellPrice - fee);
     }
 
-    function testBuyAndSell() public {
+ function testBuyAndSell() public {
+        // Record the caller's initial token balance.
+        uint256 initialBalance = token.balanceOf(address(this));
+
         uint256 buyAmount = 100 * 1e18;
         uint256 buyPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
-
-        // Buy tokens
-        hoax(address(this), buyPrice);
+        vm.deal(address(this), buyPrice);
         bondingCurve.buy{value: buyPrice}(buyAmount);
 
-        assertEq(token.balanceOf(address(this)), buyAmount);
+        // After buying, caller's balance should have increased by buyAmount.
+        uint256 balanceAfterBuy = token.balanceOf(address(this));
+        assertEq(balanceAfterBuy, initialBalance + buyAmount);
 
-        // Approve tokens for selling
+        // Approve the bonding curve to spend the bought tokens.
         token.approve(address(bondingCurve), buyAmount);
-
-        // Sell tokens
-        uint256 beforeBalance = address(this).balance;
+        uint256 ethBeforeSell = address(this).balance;
         bondingCurve.sell(buyAmount);
-        uint256 afterBalance = address(this).balance;
+        uint256 ethAfterSell = address(this).balance;
+        assertTrue(ethAfterSell > ethBeforeSell);
 
-        assertTrue(afterBalance > beforeBalance);
-        assertEq(token.balanceOf(address(this)), 0);
+        // After selling, caller's token balance should return to the original value.
+        uint256 balanceAfterSell = token.balanceOf(address(this));
+        assertEq(balanceAfterSell, initialBalance);
     }
-
     function testProvideLiquidity() public {
         uint256 amount = 1000 * 1e18;
-
-         // Get initial balance of bonding curve
-         uint256 initialBalance = token.balanceOf(address(bondingCurve));
-
-        deal(address(token), address(this), amount);
-
+        uint256 initialLiquidity = token.balanceOf(address(bondingCurve));
+        // Transfer tokens to this contract and approve the bonding curve.
+        token.transfer(address(this), amount);
         token.approve(address(bondingCurve), amount);
         bondingCurve.provideLiquidity(amount);
-
-        assertEq(token.balanceOf(address(bondingCurve)), initialBalance + amount);
+        uint256 finalLiquidity = token.balanceOf(address(bondingCurve));
+        assertEq(finalLiquidity, initialLiquidity + amount);
     }
 
     function testWithdrawFees() public {
-        // Buy tokens to generate fees
+        // Simulate a buy to generate fees.
         uint256 buyAmount = 1000 * 1e18;
         uint256 buyPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
-
-        hoax(address(this), buyPrice);
+        vm.deal(address(this), buyPrice);
         bondingCurve.buy{value: buyPrice}(buyAmount);
-
-        // Check collected fees
         assertTrue(bondingCurve.lifetimeProtocolFees() > 0);
-
-        // Properly impersonate the protocol fee address
-        uint256 beforeBalance = protocolFeeAddress.balance;
-        hoax(protocolFeeAddress);
+        
+        uint256 initialFeeBalance = protocolFeeAddress.balance;
+        vm.deal(protocolFeeAddress, 1 ether);
+        vm.prank(protocolFeeAddress);
         bondingCurve.withdrawFees();
-        uint256 afterBalance = protocolFeeAddress.balance;
-
-        assertTrue(afterBalance > beforeBalance);
+        uint256 finalFeeBalance = protocolFeeAddress.balance;
+        assertTrue(finalFeeBalance > initialFeeBalance);
     }
 
     function testFailInsufficientEthForBuy() public {
         uint256 buyAmount = 100 * 1e18;
         uint256 buyPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
-
-        // Try to buy with insufficient ETH
-        hoax(address(this), buyPrice - 1);
+        vm.deal(address(this), buyPrice - 1);
         bondingCurve.buy{value: buyPrice - 1}(buyAmount);
     }
 
     function testFailInsufficientTokensForSell() public {
-        // Try to sell without having tokens
         bondingCurve.sell(100 * 1e18);
     }
-
-    receive() external payable {}
 }
