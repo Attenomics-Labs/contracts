@@ -13,7 +13,7 @@ contract BondingCurveTest is Test {
     address public protocolFeeAddress = address(0x1234567890123456789012345678901234567890);
 
     // Mint 1,000,000 tokens of 18 decimals
-    uint256 public constant INITIAL_SUPPLY = 1_000_000 * 1e18;
+    uint256 public constant INITIAL_SUPPLY = 10000000000 * 1e18;
 
     function setUp() public {
         // Deploy the test token and the bonding curve
@@ -21,7 +21,7 @@ contract BondingCurveTest is Test {
         bondingCurve = new BondingCurve(address(token), protocolFeeAddress);
 
         // Transfer some tokens to the curve as initial liquidity (e.g., 800k tokens).
-        token.transfer(address(bondingCurve), 800_000 * 1e18);
+        token.transfer(address(bondingCurve), 80000000 * 1e18);
     }
 
     function testInitialSetup() public {
