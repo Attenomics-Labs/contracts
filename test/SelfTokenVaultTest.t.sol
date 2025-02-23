@@ -57,45 +57,45 @@ contract SelfTokenVaultTest is Test {
     }
 
     function testInitialSetup() public view {
-    // Calculate expected self tokens (10% of INITIAL_BALANCE)
-    uint256 expectedSelfTokens = (INITIAL_BALANCE * 10) / 100;
-    
-    assertEq(vault.token(), address(token));
-    assertEq(vault.owner(), creator);
-    assertEq(vault.initialBalance(), expectedSelfTokens); // Fix this line
-    assertTrue(vault.initialized());
-}
+        // Calculate expected self tokens (10% of INITIAL_BALANCE)
+        uint256 expectedSelfTokens = (INITIAL_BALANCE * 10) / 100;
 
-function testMultipleIntervalsVesting() public {
-    // Move time past lock period and multiple intervals
-    vm.warp(block.timestamp + LOCK_TIME + (DRIP_INTERVAL * 3));
+        assertEq(vault.token(), address(token));
+        assertEq(vault.owner(), creator);
+        assertEq(vault.initialBalance(), expectedSelfTokens); // Fix this line
+        assertTrue(vault.initialized());
+    }
 
-    // Calculate expected self tokens first
-    uint256 selfTokens = (INITIAL_BALANCE * 10) / 100;
-    
-    // Calculate expected available amount
-    // 20% immediate + (3 * 10%) of 80% after three intervals
-    uint256 immediateAmount = (selfTokens * 20) / 100;
-    uint256 lockedAmount = (selfTokens * 80) / 100;
-    uint256 vestedAmount = (lockedAmount * 30) / 100; // 3 intervals * 10%
+    function testMultipleIntervalsVesting() public {
+        // Move time past lock period and multiple intervals
+        vm.warp(block.timestamp + LOCK_TIME + (DRIP_INTERVAL * 3));
 
-    assertEq(vault.availableForWithdrawal(), immediateAmount + vestedAmount);
-}
+        // Calculate expected self tokens first
+        uint256 selfTokens = (INITIAL_BALANCE * 10) / 100;
 
-function testFullVestingPeriod() public {
-    // Move time way past all vesting periods
-    vm.warp(block.timestamp + LOCK_TIME + (DRIP_INTERVAL * 20));
+        // Calculate expected available amount
+        // 20% immediate + (3 * 10%) of 80% after three intervals
+        uint256 immediateAmount = (selfTokens * 20) / 100;
+        uint256 lockedAmount = (selfTokens * 80) / 100;
+        uint256 vestedAmount = (lockedAmount * 30) / 100; // 3 intervals * 10%
 
-    // Calculate expected self tokens
-    uint256 expectedSelfTokens = (INITIAL_BALANCE * 10) / 100;
+        assertEq(vault.availableForWithdrawal(), immediateAmount + vestedAmount);
+    }
 
-    vm.prank(creator);
-    vault.withdraw();
+    function testFullVestingPeriod() public {
+        // Move time way past all vesting periods
+        vm.warp(block.timestamp + LOCK_TIME + (DRIP_INTERVAL * 20));
 
-    // Should have received all self tokens
-    assertEq(token.balanceOf(creator), expectedSelfTokens);
-    assertEq(vault.withdrawn(), expectedSelfTokens);
-}
+        // Calculate expected self tokens
+        uint256 expectedSelfTokens = (INITIAL_BALANCE * 10) / 100;
+
+        vm.prank(creator);
+        vault.withdraw();
+
+        // Should have received all self tokens
+        assertEq(token.balanceOf(creator), expectedSelfTokens);
+        assertEq(vault.withdrawn(), expectedSelfTokens);
+    }
 
     function testImmediatelyAvailableTokens() public view {
         uint256 selfTokens = (INITIAL_BALANCE * 10) / 100; // Get self token amount
@@ -134,7 +134,6 @@ function testFullVestingPeriod() public {
         vm.stopPrank();
     }
 
-  
     function testFailWithdrawUnauthorized() public {
         vm.prank(address(0xdead));
         vault.withdraw();

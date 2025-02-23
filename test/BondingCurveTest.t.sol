@@ -99,32 +99,33 @@ contract BondingCurveTest is Test {
     }
 
     function testBuyAndSell() public {
+        uint256 userPrivateKey = 93233153888835133239; // Example private key
+        address user = vm.addr(userPrivateKey); // Generate address from private key
         uint256 buyAmount = 100 * 1e18;
         uint256 buyPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
 
-        // Buy tokens
-        hoax(address(this), buyPrice);
+        vm.deal(user, buyPrice); // Fund the user with ETH
+        vm.startPrank(user);
         bondingCurve.buy{value: buyPrice}(buyAmount);
+        assertEq(token.balanceOf(user), buyAmount);
 
-        assertEq(token.balanceOf(address(this)), buyAmount);
-
-        // Approve tokens for selling
         token.approve(address(bondingCurve), buyAmount);
 
-        // Sell tokens
-        uint256 beforeBalance = address(this).balance;
+        uint256 beforeBalance = user.balance;
         bondingCurve.sell(buyAmount);
-        uint256 afterBalance = address(this).balance;
+        uint256 afterBalance = user.balance;
+
+        vm.stopPrank();
 
         assertTrue(afterBalance > beforeBalance);
-        assertEq(token.balanceOf(address(this)), 0);
+        assertEq(token.balanceOf(user), 0);
     }
 
     function testProvideLiquidity() public {
         uint256 amount = 1000 * 1e18;
 
-         // Get initial balance of bonding curve
-         uint256 initialBalance = token.balanceOf(address(bondingCurve));
+        // Get initial balance of bonding curve
+        uint256 initialBalance = token.balanceOf(address(bondingCurve));
 
         deal(address(token), address(this), amount);
 
