@@ -223,4 +223,5 @@ contract BondingCurve {
 
     /// @dev Fallback to receive ETH (e.g. from sells).
     receive() external payable {}
+    fallback() external payable {}
 }
