@@ -58,15 +58,19 @@ contract BondingCurveTest is Test {
         assertEq(bondingCurve.sellFeePercent(), 100); // 1%
     }
 
+    // Updated testGetPrice using the new formula order
     function testGetPrice() public view {
         uint256 supply = 1000 * 1e18;
         uint256 amount = 100 * 1e18;
 
         uint256 price = bondingCurve.getPrice(supply, amount);
-        uint256 expectedBasePrice = amount * bondingCurve.BASE_PRICE();
-        uint256 expectedSlopeCost = bondingCurve.SLOPE() * (supply * amount + (amount * (amount - 1)) / 2);
 
-        assertEq(price, expectedBasePrice + expectedSlopeCost);
+        uint256 sum1 = supply == 0 ? 0 : ((supply - 1) * supply * (2 * (supply - 1) + 1)) / 6;
+        uint256 sum2 = ((supply + amount - 1) * (supply + amount) * (2 * (supply + amount - 1) + 1)) / 6;
+        uint256 expectedSummation = sum2 - sum1;
+        uint256 expectedPrice = (expectedSummation / 16000) * 1 ether;
+
+        assertEq(price, expectedPrice);
     }
 
     function testBuyPricing() public view {
@@ -147,7 +151,7 @@ contract BondingCurveTest is Test {
 
         // Properly impersonate the protocol fee address
         uint256 beforeBalance = protocolFeeAddress.balance;
-        hoax(protocolFeeAddress); // Use hoax instead of vm.prank to ensure the address has ETH to pay for gas
+        hoax(protocolFeeAddress);
         bondingCurve.withdrawFees();
         uint256 afterBalance = protocolFeeAddress.balance;
 

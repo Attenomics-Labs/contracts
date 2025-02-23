@@ -19,37 +19,47 @@ contract BondingCurve {
     // Total ETH fees collected over time.
     uint256 public lifetimeProtocolFees;
     
-    // Parameters for a linear bonding curve.
-    // BASE_PRICE: the starting price per token (when supply is zero).
-    // SLOPE: the extra cost added per token for each token already issued.
-    // (Values are in wei; 1e12 wei = 0.000001 ETH, 1e9 wei = 0.000000001 ETH)
-    uint256 public constant BASE_PRICE = 1e12; // 0.000001 ETH per token
-    uint256 public constant SLOPE = 1e9;       // 0.000000001 ETH per token per supply unit
+    // Constant representing the token's 18 decimal places.
+    uint256 public constant TOKEN_UNIT = 1e18;
     
     /**
      * @notice Computes the total cost for purchasing `amount` tokens starting at a given `supply`
-     * using a linear bonding curve.
+     * using your provided sum-of-squares formula.
      *
-     * Total cost = amount * BASE_PRICE + SLOPE * ( supply * amount + (amount*(amount-1))/2 )
+     * IMPORTANT:
+     * This function expects both `supply` and `amount` to be in whole token units
+     * (i.e. already normalized by dividing by TOKEN_UNIT).
+     *
+     * The formula is:
+     *   sum1 = (supply-1) * supply * (2*(supply-1) + 1) / 6    [if supply > 0, else 0]
+     *   sum2 = (supply + amount - 1) * (supply + amount) * (2*(supply + amount - 1) + 1) / 6
+     *   summation = sum2 - sum1
+     *   price = (summation * 1 ether) / 16000
      */
     function getPrice(uint256 supply, uint256 amount) public pure returns (uint256) {
-        uint256 linearCost = amount * BASE_PRICE;
-        uint256 slopeCost = SLOPE * (supply * amount + (amount * (amount - 1)) / 2);
-        return linearCost + slopeCost;
+        uint256 sum1 = supply == 0 ? 0 : ((supply - 1) * supply * (2 * (supply - 1) + 1)) / 6;
+        uint256 sum2 = (supply + amount - 1) * (supply + amount) * (2 * (supply + amount - 1) + 1) / 6;
+        uint256 summation = sum2 - sum1;
+        return (summation * 1 ether) / 16000;
     }
     
-    /// @notice Returns the raw buy price (without fees) for the given amount,
-    /// based on the current token balance held by this contract.
+    /// @notice Returns the raw buy price (without fees) for the given amount.
     function getBuyPrice(uint256 amount) public view returns (uint256) {
-        uint256 supply = ERC20(creatorToken).balanceOf(address(this));
-        return getPrice(supply, amount);
+        // Get the raw token balance (in wei) and normalize it.
+        uint256 rawSupply = ERC20(creatorToken).balanceOf(address(this));
+        uint256 normSupply = rawSupply / TOKEN_UNIT;
+        uint256 normAmount = amount / TOKEN_UNIT;
+        return getPrice(normSupply, normAmount);
     }
     
     /// @notice Returns the raw sell price (without fees) for the given amount.
     function getSellPrice(uint256 amount) public view returns (uint256) {
-        uint256 supply = ERC20(creatorToken).balanceOf(address(this));
-        require(supply >= amount, "Insufficient supply");
-        return getPrice(supply - amount, amount);
+        uint256 rawSupply = ERC20(creatorToken).balanceOf(address(this));
+        require(rawSupply >= amount, "Insufficient supply");
+        uint256 normSupply = rawSupply / TOKEN_UNIT;
+        uint256 normAmount = amount / TOKEN_UNIT;
+        // When selling, the effective supply is reduced by normAmount.
+        return getPrice(normSupply - normAmount, normAmount);
     }
     
     /// @notice Returns the buy price after adding the 0.5% fee.
@@ -93,27 +103,28 @@ contract BondingCurve {
      */
     function _initialBuy(address buyer, uint256 ethAmount) internal {
         uint256 low = 0;
-        uint256 high = (ethAmount / 1e9) * 2; // approximate upper bound; adjust as needed
+        // Here high is an approximate upper bound for the number of whole tokens to buy.
+        uint256 high = (ethAmount / 1e9) * 2;
         uint256 mid;
-        // Binary search with a fixed number of iterations.
+        // Binary search with fixed iterations.
         for (uint256 i = 0; i < 20; i++) {
             mid = (low + high) / 2;
-            uint256 price = getBuyPriceAfterFees(mid);
+            // mid is a normalized token amount; convert it back to raw tokens.
+            uint256 price = getBuyPriceAfterFees(mid * TOKEN_UNIT);
             if (price <= ethAmount) {
                 low = mid;
             } else {
                 high = mid;
             }
         }
-        uint256 tokensToBuy = low;
+        uint256 tokensToBuy = low * TOKEN_UNIT;
         require(tokensToBuy > 0, "Insufficient ETH for any tokens");
         
         uint256 totalPrice = getBuyPriceAfterFees(tokensToBuy);
         uint256 fee = (getBuyPrice(tokensToBuy) * buyFeePercent) / feePrecision;
         lifetimeProtocolFees += fee;
         
-        // Transfer tokens from this contract to the buyer.
-        ERC20(creatorToken).transfer(buyer, tokensToBuy);
+        require(ERC20(creatorToken).transfer(buyer, tokensToBuy), "Token transfer failed");
         
         // Refund any excess ETH.
         uint256 refund = ethAmount - totalPrice;
@@ -124,7 +135,7 @@ contract BondingCurve {
     
     /**
      * @notice Buys tokens from the bonding curve.
-     * @param amount The amount of tokens the buyer wishes to purchase.
+     * @param amount The amount of tokens (in wei, representing whole tokens) the buyer wishes to purchase.
      */
     function buy(uint256 amount) external payable {
         uint256 grossPrice = getBuyPriceAfterFees(amount);
@@ -133,7 +144,7 @@ contract BondingCurve {
         uint256 fee = (getBuyPrice(amount) * buyFeePercent) / feePrecision;
         lifetimeProtocolFees += fee;
         
-        ERC20(creatorToken).transfer(msg.sender, amount);
+        require(ERC20(creatorToken).transfer(msg.sender, amount), "Token transfer failed");
         
         if (msg.value > grossPrice) {
             payable(msg.sender).transfer(msg.value - grossPrice);
@@ -142,13 +153,12 @@ contract BondingCurve {
     
     /**
      * @notice Sells tokens back to the bonding curve.
-     * @param amount The amount of tokens the seller wants to sell.
+     * @param amount The amount of tokens (in wei, representing whole tokens) the seller wants to sell.
      */
     function sell(uint256 amount) external {
         ERC20 token = ERC20(creatorToken);
         require(token.balanceOf(msg.sender) >= amount, "Insufficient token balance");
-        
-        token.transferFrom(msg.sender, address(this), amount);
+        require(token.transferFrom(msg.sender, address(this), amount), "Token transferFrom failed");
         
         uint256 rawSellPrice = getSellPrice(amount);
         uint256 fee = (rawSellPrice * sellFeePercent) / feePrecision;
@@ -164,7 +174,7 @@ contract BondingCurve {
      * @param amount The amount of CreatorToken to deposit.
      */
     function provideLiquidity(uint256 amount) external {
-        ERC20(creatorToken).transferFrom(msg.sender, address(this), amount);
+        require(ERC20(creatorToken).transferFrom(msg.sender, address(this), amount), "Token transferFrom failed");
     }
     
     /**
