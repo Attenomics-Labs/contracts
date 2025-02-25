@@ -4,8 +4,6 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/SelfTokenVault.sol";
 import "../src/CreatorToken.sol";
-import "../src/GasliteDrop.sol";
-import "../src/AttenomicsCreatorEntryPoint.sol";
 
 contract SelfTokenVaultTest is Test {
     SelfTokenVault public vault;
@@ -14,19 +12,8 @@ contract SelfTokenVaultTest is Test {
     uint256 public constant INITIAL_BALANCE = 1_000_000 * 1e18;
     uint256 public constant LOCK_TIME = 180 days;
     uint256 public constant DRIP_INTERVAL = 30 days;
-    GasliteDrop public gasliteDrop;
-    AttenomicsCreatorEntryPoint public entryPoint;
 
     function setUp() public {
-        // Deploy GasliteDrop first
-        gasliteDrop = new GasliteDrop();
-        
-        // Make sure gasliteDrop is properly initialized
-        require(address(gasliteDrop) != address(0), "GasliteDrop not deployed");
-
-        // Deploy EntryPoint with valid gasliteDrop
-        entryPoint = new AttenomicsCreatorEntryPoint(address(gasliteDrop));
-        
         creator = address(0x123);
 
         // Deploy creator token first

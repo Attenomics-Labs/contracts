@@ -7,7 +7,6 @@ import "../src/SelfTokenVault.sol";
 import "../src/BondingCurve.sol";
 import "../src/CreatorTokenSupporter.sol";
 import "../src/GasliteDrop.sol";
-import "../src/AttenomicsCreatorEntryPoint.sol";
 
 contract CreatorTokenTest is Test {
     CreatorToken public token;
@@ -15,49 +14,22 @@ contract CreatorTokenTest is Test {
     address public aiAgent;
     bytes32 public handle;
     uint256 public constant TOTAL_SUPPLY = 1_000_000 * 1e18;
-    GasliteDrop public gasliteDrop;
-    AttenomicsCreatorEntryPoint public entryPoint;
 
     // Events to test
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     function setUp() public {
-        // Set addresses
-        creator = address(1);
-        aiAgent = address(2);
+        creator = address(this);
+        aiAgent = address(0x123);
+        handle = keccak256(abi.encodePacked("test_creator"));
 
-        // Deploy GasliteDrop first
-        gasliteDrop = new GasliteDrop();
-        
-        // Deploy EntryPoint
-        entryPoint = new AttenomicsCreatorEntryPoint(address(gasliteDrop));
-        
-        // Setup AI agent
-        vm.startPrank(address(this));
-        entryPoint.setAIAgent(aiAgent, true);
-        vm.stopPrank();
-
-        // Deploy test token
-        vm.startPrank(creator);
-        (token, handle) = deployTestToken("Test Token", "TEST");
-        vm.stopPrank();
-    }
-
-    function deployTestToken(
-        string memory name, 
-        string memory symbol
-    ) internal returns (CreatorToken token, bytes32 tokenHandle) {
-        // Create handle
-        string memory handleStr = string(abi.encodePacked(name, "-handle"));
-        tokenHandle = entryPoint.getHandleHash(handleStr);
-
-        // Create config data
+        // Create token config
         CreatorToken.TokenConfig memory config = CreatorToken.TokenConfig({
             totalSupply: TOTAL_SUPPLY,
             selfPercent: 10,
             marketPercent: 80,
             supporterPercent: 10,
-            handle: tokenHandle,
+            handle: handle,
             aiAgent: aiAgent
         });
 
@@ -76,24 +48,19 @@ contract CreatorTokenTest is Test {
             lockedPercentage: 80
         });
 
-        // Pack config data
-        bytes memory configData = abi.encode(config);
-        bytes memory distributorConfigData = abi.encode(distributorConfig);
-        bytes memory vaultConfigData = abi.encode(vaultConfig);
+        // Deploy GasliteDrop
+        address gasliteDrop = address(new GasliteDrop());
 
-        // Deploy token through entry point
-        entryPoint.deployCreatorToken(
-            configData,
-            distributorConfigData,
-            vaultConfigData,
-            name,
-            symbol,
-            "ipfs://token-metadata"
+        // Deploy token with configs
+        token = new CreatorToken(
+            "Test Token",
+            "TEST",
+            abi.encode(config),
+            abi.encode(distributorConfig),
+            abi.encode(vaultConfig),
+            creator,
+            gasliteDrop
         );
-
-        // Get deployed token address
-        address tokenAddress = entryPoint.creatorTokenByHandle(tokenHandle);
-        token = CreatorToken(tokenAddress);
     }
 
     function testInitialSetup() public view {

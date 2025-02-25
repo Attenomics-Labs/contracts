@@ -19,14 +19,6 @@ contract DeployTest is Test {
     }
 
     function testDeployment() public {
-        // Deploy GasliteDrop first
-        GasliteDrop gasliteDrop = new GasliteDrop();
-        
-        // Deploy EntryPoint
-        AttenomicsCreatorEntryPoint entryPoint = new AttenomicsCreatorEntryPoint(
-            address(gasliteDrop)
-        );
-        
         // Run the deployment script
         deployScript.run();
 
@@ -39,6 +31,7 @@ contract DeployTest is Test {
         assert(deployScript.supporter() != address(0));
 
         // Verify that the AI agent is correctly set
+        AttenomicsCreatorEntryPoint entryPoint = AttenomicsCreatorEntryPoint(deployScript.entryPoint());
         assert(entryPoint.allowedAIAgents(deployScript.aiAgent()));
 
         // Verify the creator token's configurations

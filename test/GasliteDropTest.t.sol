@@ -26,14 +26,11 @@ contract GasliteDropTest is Test {
     uint256 public constant TOKENS_PER_RECIPIENT = 100 * 1e18;
 
     function setUp() public {
-        // Deploy with proper initialization
-        gasliteDrop = new GasliteDrop();
-        vm.deal(address(this), 100 ether); // Fund test contract
-
         // Set deployer address
         deployer = address(this);
 
         // Deploy contracts
+        gasliteDrop = new GasliteDrop();
         nft = new MockERC721();
 
         // Initialize token amounts
