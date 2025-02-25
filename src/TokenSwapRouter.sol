@@ -29,7 +29,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
     error DeadlineExpired();
     error ExcessiveSlippage();
     error InvalidToken();
-    error SwapFailed();
+    error SwapOperationFailed();
     error TokenTransferFailed();
 
     // Events
@@ -42,7 +42,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         uint256 ethValue
     );
 
-    event SwapFailed(
+    event SwapError(
         address indexed user,
         address indexed tokenA,
         address indexed tokenB,
@@ -138,14 +138,16 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
             } catch {
                 // If buy fails, return ETH to user
                 payable(msg.sender).transfer(buyAmount);
-                emit SwapFailed(msg.sender, tokenA, tokenB, amountIn, "Buy operation failed");
+                emit SwapError(msg.sender, tokenA, tokenB, amountIn, "Buy operation failed");
+                revert SwapOperationFailed();
             }
         } catch {
             // If sell fails, return tokenA to user
             if (!ERC20(tokenA).transfer(msg.sender, amountIn)) {
                 revert TokenTransferFailed();
             }
-            emit SwapFailed(msg.sender, tokenA, tokenB, amountIn, "Sell operation failed");
+            emit SwapError(msg.sender, tokenA, tokenB, amountIn, "Sell operation failed");
+            revert SwapOperationFailed();
         }
     }
 
