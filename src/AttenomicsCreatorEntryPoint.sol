@@ -34,6 +34,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Mapping from hashed Twitter/X handle to NFT tokenId.
     mapping(bytes32 => uint256) public tokenIdByHandle;
 
+    // Add mapping for bonding curve lookup
+    mapping(address => address) public getBondingCurveByToken;
+
     uint256 public nextTokenId;
 
     address public gasliteDropAddress;
@@ -101,6 +104,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         // Store the vault and supporter addresses
         creatorTokenByHandle[config.handle] = address(token);
         tokenIdByHandle[config.handle] = nextTokenId;
+
+        // Store the bonding curve address
+        getBondingCurveByToken[address(token)] = token.bondingCurve();
 
         // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(creator, nextTokenId);

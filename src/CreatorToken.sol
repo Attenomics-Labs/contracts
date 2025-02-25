@@ -68,6 +68,9 @@ contract CreatorToken is ERC20 {
             "Invalid percentage split"
         );
 
+        require(_creator != address(0), "Invalid creator");
+        require(gasLiteDropContractAddress != address(0), "Invalid gaslite");
+
         creator = _creator;
         aiAgent = config.aiAgent;
         handle = config.handle;
@@ -90,6 +93,8 @@ contract CreatorToken is ERC20 {
         CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
         supporterContract = address(supporter);
 
+        // bondingCurve = address(new BondingCurve(address(this), protocolFeeAddress));
+
 
 
         _mint(selfTokenVault, selfTokens);
@@ -100,10 +105,6 @@ contract CreatorToken is ERC20 {
     // Optional: override ERC20 decimals.
     function decimals() public pure override returns (uint8) {
         return 18;
-    }
-
-    function getBondingCurveAddress() public view returns (address) {
-        return bondingCurve;
     }
 
     // Add these getter functions

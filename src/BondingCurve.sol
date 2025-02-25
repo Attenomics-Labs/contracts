@@ -9,7 +9,7 @@ import "forge-std/console.sol";
  *
  * In this implementation:
  * - The available tokens for sale are defined by the ERC20 token balance held by this contract.
- * - purchaseMarketSupply is the effective “sold” supply used for pricing, which starts at 0.
+ * - purchaseMarketSupply is the effective "sold" supply used for pricing, which starts at 0.
  *
  * When buying:
  *   • The cost is computed using getPrice(purchaseMarketSupply, amount).
@@ -60,9 +60,13 @@ contract BondingCurve {
     // ======================
     //      Constructor
     // ======================
-    constructor(address _creatorToken, address _protocolFeeAddress) payable {
+    constructor(
+        address _creatorToken,
+        address _protocolFeeAddress
+    ) payable {
         require(_creatorToken != address(0), "Invalid token address");
         require(_protocolFeeAddress != address(0), "Invalid fee address");
+        require(ERC20(_creatorToken).totalSupply() > 0, "Token not initialized");
         creatorToken = _creatorToken;
         protocolFeeAddress = _protocolFeeAddress;
         purchaseMarketSupply = 0;
@@ -173,7 +177,7 @@ contract BondingCurve {
      *   - The ERC20 token balance of the contract (available tokens) must be at least `amount`.
      *   - The ETH sent must cover the cost (including fee).
      */
-    function buy(uint256 amount) external payable {
+    function buy(uint256 amount) external payable returns (uint256) {
         require(amount > 0, "Amount must be > 0");
         require(amount <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
 
@@ -204,6 +208,8 @@ contract BondingCurve {
         if (msg.value > cost) {
             payable(msg.sender).transfer(msg.value - cost);
         }
+
+        return cost;
     }
 
     /**
@@ -214,7 +220,7 @@ contract BondingCurve {
      *
      * On sell, the effective supply is reduced and the tokens are returned to the contract.
      */
-    function sell(uint256 amount) external {
+    function sell(uint256 amount) external returns (uint256) {
         require(amount > 0, "Amount must be > 0");
         ERC20 token = ERC20(creatorToken);
         require(token.balanceOf(msg.sender) >= amount, "Not enough tokens to sell");
@@ -241,6 +247,8 @@ contract BondingCurve {
 
         require(address(this).balance >= netSellPrice, "Not enough ETH in curve");
         payable(msg.sender).transfer(netSellPrice);
+
+        return netSellPrice;
     }
 
     // ======================
