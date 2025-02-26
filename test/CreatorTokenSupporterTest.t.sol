@@ -1,46 +1,19 @@
-// SPDX-License-Identifier: MIT
+    // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/CreatorTokenSupporter.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../src/CreatorToken.sol";
+import "../src/GasliteDrop.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-
-// Simple mock token
-contract MockToken is ERC20 {
-    constructor() ERC20("Test Token", "TEST") {}
-
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-}
-
-// Simple mock GasliteDrop
-contract MockGasliteDrop {
-    function airdropERC20(
-        address token,
-        address[] memory recipients,
-        uint256[] memory amounts,
-        uint256 totalAmount
-    )
-        external
-    {
-        require(recipients.length == amounts.length, "Arrays must be same length");
-
-        // Transfer tokens from caller to recipients
-        for (uint256 i = 0; i < recipients.length; i++) {
-            ERC20(token).transferFrom(msg.sender, recipients[i], amounts[i]);
-        }
-    }
-}
 
 contract CreatorTokenSupporterTest is Test {
     using ECDSA for bytes32;
 
     CreatorTokenSupporter public supporter;
-    MockToken public token;
-    MockGasliteDrop public gasliteDrop;
+    CreatorToken public token;
+    GasliteDrop public gasliteDrop;
     address public aiAgent;
     uint256 public aiAgentPrivateKey;
     uint256 public constant INITIAL_SUPPLY = 1_000_000 * 1e18;
@@ -52,9 +25,8 @@ contract CreatorTokenSupporterTest is Test {
         aiAgentPrivateKey = 0x123;
         aiAgent = vm.addr(aiAgentPrivateKey);
 
-        // Deploy mock contracts
-        token = new MockToken();
-        gasliteDrop = new MockGasliteDrop();
+        // Deploy GasliteDrop
+        gasliteDrop = new GasliteDrop();
 
         // Create distributor config
         CreatorTokenSupporter.DistributorConfig memory distributorConfig = CreatorTokenSupporter.DistributorConfig({
@@ -63,13 +35,36 @@ contract CreatorTokenSupporterTest is Test {
             totalDays: 100
         });
 
-        // Deploy supporter contract directly
-        supporter =
-            new CreatorTokenSupporter(address(token), aiAgent, abi.encode(distributorConfig), address(gasliteDrop));
+        // Create proper vault config
+        SelfTokenVault.VaultConfig memory vaultConfig = SelfTokenVault.VaultConfig({
+            dripPercentage: 10,
+            dripInterval: 30 days,
+            lockTime: 180 days,
+            lockedPercentage: 80
+        });
 
-        // Mint tokens to the supporter contract
-        uint256 supporterAmount = INITIAL_SUPPLY * 10 / 100; // 10% of supply
-        token.mint(address(supporter), supporterAmount);
+        // Deploy creator token with configs
+        CreatorToken.TokenConfig memory config = CreatorToken.TokenConfig({
+            totalSupply: INITIAL_SUPPLY,
+            selfPercent: 10,
+            marketPercent: 80,
+            supporterPercent: 10,
+            handle: keccak256(abi.encodePacked("test")),
+            aiAgent: aiAgent
+        });
+
+        token = new CreatorToken(
+            "Test Token",
+            "TEST",
+            abi.encode(config),
+            abi.encode(distributorConfig),
+            abi.encode(vaultConfig),
+            address(this),
+            address(gasliteDrop)
+        );
+
+        // Get the supporter contract address that was created by CreatorToken
+        supporter = CreatorTokenSupporter(token.supporterContract());
     }
 
     function testInitialSetup() public view {
@@ -182,10 +177,6 @@ contract CreatorTokenSupporterTest is Test {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(dataHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(aiAgentPrivateKey, ethSignedHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        // Make sure GasliteDrop has approval
-        vm.prank(address(supporter));
-        token.approve(address(gasliteDrop), type(uint256).max);
 
         // First distribution succeeds
         supporter.distributeWithData(abi.encode(data), signature);

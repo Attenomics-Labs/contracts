@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/GasliteDrop.sol";
 import "../src/CreatorToken.sol";
-import "./MockBondingCurve.sol"; // Import our new mock
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract MockERC721 is ERC721 {
@@ -15,67 +14,9 @@ contract MockERC721 is ERC721 {
     }
 }
 
-// Add a simplified mock for SelfTokenVault
-contract MockSelfTokenVault {
-    address public token;
-    address public owner;
-
-    constructor(address _token, address _owner) {
-        token = _token;
-        owner = _owner;
-    }
-}
-
-// Add a simplified mock for CreatorTokenSupporter
-contract MockCreatorTokenSupporter {
-    address public creatorToken;
-    address public aiAgent;
-
-    constructor(address _token, address _aiAgent) {
-        creatorToken = _token;
-        aiAgent = _aiAgent;
-    }
-}
-
-// Mock CreatorToken that allows setting the sub-contracts directly
-contract TestCreatorToken is ERC20 {
-    address public selfTokenVault;
-    address public bondingCurve;
-    address public supporterContract;
-    address public creator;
-    bytes32 public handle;
-    address public aiAgent;
-
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
-        creator = msg.sender;
-    }
-
-    function setSubContracts(
-        address _vault,
-        address _curve,
-        address _supporter,
-        address _creator,
-        address _aiAgent,
-        bytes32 _handle
-    )
-        public
-    {
-        selfTokenVault = _vault;
-        bondingCurve = _curve;
-        supporterContract = _supporter;
-        creator = _creator;
-        aiAgent = _aiAgent;
-        handle = _handle;
-    }
-
-    function mintTokens(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-}
-
 contract GasliteDropTest is Test {
     GasliteDrop public gasliteDrop;
-    TestCreatorToken public token; // Using our test token
+    CreatorToken public token;
     MockERC721 public nft;
     address public deployer;
     address[] public recipients;
@@ -92,45 +33,51 @@ contract GasliteDropTest is Test {
         gasliteDrop = new GasliteDrop();
         nft = new MockERC721();
 
-        // Create our token with simplified setup
-        token = new TestCreatorToken("Test Token", "TEST");
-
-        // Total supply for our test
+        // Initialize token amounts
         uint256 totalSupply = 1_000_000 * 1e18;
 
-        // Calculate token distribution
-        uint256 selfTokens = totalSupply * 10 / 100;
-        uint256 marketTokens = totalSupply * 80 / 100;
-        uint256 supporterTokens = totalSupply * 10 / 100;
+        // Create token config
+        CreatorToken.TokenConfig memory config = CreatorToken.TokenConfig({
+            totalSupply: totalSupply,
+            selfPercent: 10,
+            marketPercent: 80,
+            supporterPercent: 10,
+            handle: keccak256(abi.encodePacked("test")),
+            aiAgent: address(this)
+        });
 
-        // Mint tokens directly
-        token.mintTokens(address(this), totalSupply);
+        // Create proper distributor config
+        CreatorTokenSupporter.DistributorConfig memory distributorConfig = CreatorTokenSupporter.DistributorConfig({
+            dailyDripAmount: 1000 * 1e18,
+            dripInterval: 1 days,
+            totalDays: 100
+        });
 
-        // Create handle hash
-        bytes32 handleHash = keccak256(abi.encodePacked("test"));
+        // Create proper vault config
+        SelfTokenVault.VaultConfig memory vaultConfig = SelfTokenVault.VaultConfig({
+            dripPercentage: 10,
+            dripInterval: 30 days,
+            lockTime: 180 days,
+            lockedPercentage: 80
+        });
 
-        // Create our mock sub-contracts
-        MockSelfTokenVault vault = new MockSelfTokenVault(address(token), deployer);
-        MockBondingCurve curve = new MockBondingCurve(address(token), deployer);
-        MockCreatorTokenSupporter supporter = new MockCreatorTokenSupporter(address(token), address(this));
-
-        // Set up token's sub-contracts
-        token.setSubContracts(address(vault), address(curve), address(supporter), deployer, address(this), handleHash);
-
-        // Transfer tokens to the various sub-contracts
-        token.transfer(address(vault), selfTokens);
-        token.transfer(address(curve), marketTokens);
-        token.transfer(address(supporter), supporterTokens);
-
+        // Deploy creator token with correct parameters
+        token = new CreatorToken(
+            "Test Token",
+            "TEST",
+            abi.encode(config),
+            abi.encode(distributorConfig), // Changed from baseURI
+            abi.encode(vaultConfig), // Changed from contractURI
+            deployer,
+            address(gasliteDrop)
+        );
         // Initialize arrays
         recipients = new address[](RECIPIENT_COUNT);
         amounts = new uint256[](RECIPIENT_COUNT);
         tokenIds = new uint256[](RECIPIENT_COUNT);
 
         uint256 requiredTokens = RECIPIENT_COUNT * TOKENS_PER_RECIPIENT;
-
-        // Use deal to ensure we have enough tokens for testing
-        token.mintTokens(deployer, requiredTokens);
+        deal(address(token), deployer, requiredTokens);
 
         // Setup test data
         for (uint256 i = 0; i < RECIPIENT_COUNT; i++) {
@@ -140,6 +87,9 @@ contract GasliteDropTest is Test {
             // Mint NFTs to deployer
             nft.mint(deployer, i);
         }
+
+        // Ensure deployer has sufficient tokens before approval
+        require(token.balanceOf(deployer) >= RECIPIENT_COUNT * TOKENS_PER_RECIPIENT, "Insufficient token balance");
 
         // Approve transfers
         token.approve(address(gasliteDrop), RECIPIENT_COUNT * TOKENS_PER_RECIPIENT);
@@ -183,6 +133,47 @@ contract GasliteDropTest is Test {
         }
     }
 
+    // To be Continued -- Remaining functions are not implemented yet
+    //     function testAirdropETH() public {
+    //     // Use a smaller amount per recipient to avoid any rounding issues
+    //     uint256 amountPerRecipient = 0.01 ether;
+    //     uint256 totalAmount = amountPerRecipient * recipients.length;
+
+    // Execute airdrop
+    // gasliteDrop.airdropETH{value: totalAmount}(recipients, ethAmounts);
+
+    //     // Create amounts array
+    //     uint256[] memory ethAmounts = new uint256[](recipients.length);
+    //     for (uint256 i = 0; i < recipients.length; i++) {
+    //         ethAmounts[i] = amountPerRecipient;
+    //     }
+
+    //     // Record initial balances
+    //     uint256[] memory initialBalances = new uint256[](recipients.length);
+    //     for (uint256 i = 0; i < recipients.length; i++) {
+    //         initialBalances[i] = recipients[i].balance;
+    //     }
+
+    //     // Verify total amount matches sum of individual amounts
+    //     uint256 sum = 0;
+    //     for (uint256 i = 0; i < ethAmounts.length; i++) {
+    //         sum += ethAmounts[i];
+    //     }
+    //     require(sum == totalAmount, "Amount mismatch");
+
+    //     // Execute airdrop
+    //     gasliteDrop.airdropETH{value: totalAmount}(recipients, ethAmounts);
+
+    //     // Verify balances
+    //     for (uint256 i = 0; i < recipients.length; i++) {
+    //         assertEq(
+    //             recipients[i].balance,
+    //             initialBalances[i] + ethAmounts[i],
+    //             "ETH balance mismatch"
+    //         );
+    //     }
+    // }
+
     function testLargeERC20Airdrop() public {
         // Reduce the size to something more manageable
         uint256 largeCount = 200; // Reduced from 1000
@@ -196,8 +187,8 @@ contract GasliteDropTest is Test {
             totalAmount += 1 ether;
         }
 
-        // Mint additional tokens for the large airdrop
-        token.mintTokens(deployer, totalAmount);
+        // Give deployer enough tokens for the large airdrop
+        deal(address(token), deployer, totalAmount);
         token.approve(address(gasliteDrop), totalAmount);
 
         uint256 gasBefore = gasleft();
@@ -229,6 +220,31 @@ contract GasliteDropTest is Test {
             tokenIds // Original longer array
         );
     }
+
+    function testFailETHMismatchedArrays() public {
+        // Create mismatched arrays
+        address[] memory shortRecipients = new address[](RECIPIENT_COUNT - 1);
+
+        gasliteDrop.airdropETH{value: 1 ether}(
+            shortRecipients,
+            amounts // Original longer array
+        );
+    }
+
+    function testFailInsufficientETH() public {
+        uint256 totalAmount = 10 ether;
+        uint256 amountPerRecipient = totalAmount / recipients.length;
+
+        uint256[] memory ethAmounts = new uint256[](recipients.length);
+        for (uint256 i = 0; i < recipients.length; i++) {
+            ethAmounts[i] = amountPerRecipient;
+        }
+
+        // Try to send less ETH than needed
+        gasliteDrop.airdropETH{value: totalAmount - 1}(recipients, ethAmounts);
+    }
+
+    // Test ERC20 airdrop with large recipient list for gas optimization
 
     receive() external payable {}
 }
