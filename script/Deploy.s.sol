@@ -26,7 +26,7 @@ contract Deploy is Script {
     function run() external {
         // Get private key from environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
+
         // Start broadcasting transactions with higher gas price to replace pending tx
         vm.startBroadcast(deployerPrivateKey);
 
@@ -44,9 +44,7 @@ contract Deploy is Script {
         console2.log("GasliteDrop:", gasliteDrop);
 
         // Deploy EntryPoint with GasliteDrop address
-        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(
-            address(gasliteDropContract)
-        );
+        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(address(gasliteDropContract));
         entryPoint = address(entryPointContract);
         console2.log("EntryPoint:", entryPoint);
 
@@ -96,20 +94,18 @@ contract Deploy is Script {
             "SCT",
             "ipfs://sample-metadata-uri"
         );
-        
+
         // Add a small delay to ensure state is finalized
         vm.warp(block.timestamp + 1);
-        
+
         // Get the deployed addresses from the entry point
         creatorToken = entryPointContract.creatorTokenByHandle(handle);
         CreatorToken token = CreatorToken(creatorToken);
-        
 
-        
         selfTokenVault = token.selfTokenVault();
         supporter = token.supporterContract();
         bondingCurve = token.bondingCurve(); // Get the existing bonding curve
-        
+
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
 

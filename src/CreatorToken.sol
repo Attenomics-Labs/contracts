@@ -26,9 +26,9 @@ contract CreatorToken is ERC20 {
     }
 
     // Addresses of the deployed sub-contracts.
-    address public selfTokenVault;       // x% goes here
-    address public bondingCurve;         // y% goes here
-    address public supporterContract;    // z% goes here
+    address public selfTokenVault; // x% goes here
+    address public bondingCurve; // y% goes here
+    address public supporterContract; // z% goes here
 
     address public protocolFeeAddress = 0xE2B48E911562a221619533a5463975Fdd92E7fC7;
 
@@ -37,7 +37,7 @@ contract CreatorToken is ERC20 {
 
     // The hash of the creator's handle.
     bytes32 public handle;
-    
+
     // The AI agent address.
     address public aiAgent;
 
@@ -60,13 +60,12 @@ contract CreatorToken is ERC20 {
         bytes memory vaultConfigData,
         address _creator,
         address gasLiteDropContractAddress
-    ) ERC20(_name, _symbol) {
+    )
+        ERC20(_name, _symbol)
+    {
         // Decode the passed bytes into the TokenConfig struct.
         TokenConfig memory config = abi.decode(configData, (TokenConfig));
-        require(
-            config.selfPercent + config.marketPercent + config.supporterPercent == 100,
-            "Invalid percentage split"
-        );
+        require(config.selfPercent + config.marketPercent + config.supporterPercent == 100, "Invalid percentage split");
 
         require(_creator != address(0), "Invalid creator");
         require(gasLiteDropContractAddress != address(0), "Invalid gaslite");
@@ -82,7 +81,7 @@ contract CreatorToken is ERC20 {
         uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
 
         // Deploy the SelfTokenVault (x%).
-        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData , selfTokens);
+        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData, selfTokens);
         selfTokenVault = address(vault);
 
         // Deploy the BondingCurve (y%).
@@ -90,12 +89,11 @@ contract CreatorToken is ERC20 {
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
-        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
+        CreatorTokenSupporter supporter =
+            new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
         supporterContract = address(supporter);
 
         // bondingCurve = address(new BondingCurve(address(this), protocolFeeAddress));
-
-
 
         _mint(selfTokenVault, selfTokens);
         _mint(bondingCurve, marketTokens);

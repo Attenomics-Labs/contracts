@@ -31,9 +31,9 @@ contract BondingCurve {
     address public protocolFeeAddress;
 
     // Fee configuration (basis points)
-    uint256 public buyFeePercent = 50;   // 0.5%
+    uint256 public buyFeePercent = 50; // 0.5%
     uint256 public sellFeePercent = 100; // 1%
-    uint256 public constant feePrecision = 10000;
+    uint256 public constant feePrecision = 10_000;
 
     // Track ETH fees collected
     uint256 public lifetimeProtocolFees;
@@ -49,7 +49,7 @@ contract BondingCurve {
     uint256 public constant NORMALIZER = 1e12;
     uint256 public constant SCALING_FACTOR = 1e28;
     uint256 public constant BASE_PRICE = 1e2;
-    uint256 public constant SLOPE      = 1e3;
+    uint256 public constant SLOPE = 1e3;
 
     /**
      * purchaseMarketSupply represents the effective supply used for pricing.
@@ -60,10 +60,7 @@ contract BondingCurve {
     // ======================
     //      Constructor
     // ======================
-    constructor(
-        address _creatorToken,
-        address _protocolFeeAddress
-    ) payable {
+    constructor(address _creatorToken, address _protocolFeeAddress) payable {
         require(_creatorToken != address(0), "Invalid token address");
         require(_protocolFeeAddress != address(0), "Invalid fee address");
         require(ERC20(_creatorToken).totalSupply() > 0, "Token not initialized");
@@ -90,8 +87,8 @@ contract BondingCurve {
     function getPrice(uint256 effectiveSupply, uint256 amount) public pure returns (uint256) {
         uint256 normSupply = effectiveSupply / NORMALIZER;
         uint256 normAmount = amount / NORMALIZER;
-        uint256 costUnits = normAmount * BASE_PRICE
-            + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
+        uint256 costUnits =
+            normAmount * BASE_PRICE + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
         return (costUnits * 1 ether) / SCALING_FACTOR;
     }
 

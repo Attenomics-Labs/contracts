@@ -7,9 +7,8 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IGasliteDrop} from "./interfaces/IGasliteDrop.sol";
 
-
 /**
- * @dev security tradeoff suppose that everytime we do an airdrop we verify whether the token that has been distributed are correctly or not for particular peroiod of time x-y then the issue comes is that we have a tradeoff of gas cost but not having it is being reliable on ai agent that it actually does the airdrop correct 
+ * @dev security tradeoff suppose that everytime we do an airdrop we verify whether the token that has been distributed are correctly or not for particular peroiod of time x-y then the issue comes is that we have a tradeoff of gas cost but not having it is being reliable on ai agent that it actually does the airdrop correct
  */
 
 /**
@@ -41,9 +40,10 @@ contract CreatorTokenSupporter is Ownable {
     // Configuration used in the constructor.
     struct DistributorConfig {
         uint256 dailyDripAmount; // Amount of tokens to distribute per day.
-        uint256 dripInterval;    // Interval (in seconds) between drips.
-        uint256 totalDays;       // Total number of days for distribution.
+        uint256 dripInterval; // Interval (in seconds) between drips.
+        uint256 totalDays; // Total number of days for distribution.
     }
+
     DistributorConfig public distributorConfig;
 
     // New distribution data struct for actual distribution calls.
@@ -66,7 +66,9 @@ contract CreatorTokenSupporter is Ownable {
         address _aiAgent,
         bytes memory distributorConfigData,
         address _gasLiteDropAddress
-    ) Ownable(msg.sender) {
+    )
+        Ownable(msg.sender)
+    {
         creatorToken = _creatorToken;
         // Decode the distributor configuration data.
         DistributorConfig memory config = abi.decode(distributorConfigData, (DistributorConfig));
@@ -84,7 +86,14 @@ contract CreatorTokenSupporter is Ownable {
      * @param signature The signature over the hash of the distribution data.
      * @return True if the signature is valid, false otherwise.
      */
-    function _verifyDistributionData(DistributionData memory data, bytes memory signature) internal view returns (bool) {
+    function _verifyDistributionData(
+        DistributionData memory data,
+        bytes memory signature
+    )
+        internal
+        view
+        returns (bool)
+    {
         // Compute the hash of the distribution data.
         bytes32 dataHash = keccak256(abi.encode(data.recipients, data.amounts, data.totalAmount));
         require(!usedHashes[dataHash], "Hash already used"); // Prevent double spending
@@ -137,7 +146,14 @@ contract CreatorTokenSupporter is Ownable {
      * @param recipients Array of addresses to receive tokens.
      * @param amounts Array of token amounts corresponding to each recipient.
      */
-    function distribute(address[] calldata recipients, uint256[] calldata amounts, uint256 totalAmount) external onlyAiAgent {
+    function distribute(
+        address[] calldata recipients,
+        uint256[] calldata amounts,
+        uint256 totalAmount
+    )
+        external
+        onlyAiAgent
+    {
         IGasliteDrop(gasLiteDropAddress).airdropERC20(creatorToken, recipients, amounts, totalAmount);
         totalDistributed += totalAmount;
         emit DistributionExecuted(keccak256(abi.encode(recipients, amounts, totalAmount)), msg.sender);
