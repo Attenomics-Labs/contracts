@@ -8,10 +8,22 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Mock token implementation
 contract MockToken is ERC20 {
+    address public bondingCurveAddress;
+    
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
 
     function mint(address to, uint256 amount) public {
         _mint(to, amount);
+    }
+    
+    // Add bondingCurve function to match CreatorToken interface
+    function bondingCurve() public view returns (address) {
+        return bondingCurveAddress;
+    }
+    
+    // Add function to set the bonding curve address
+    function setBondingCurve(address _bondingCurve) public {
+        bondingCurveAddress = _bondingCurve;
     }
 }
 
@@ -55,7 +67,11 @@ contract TokenSwapRouterTest is Test {
         tokenA.mint(address(curveA), 1_000_000 * 1e18);
         tokenB.mint(address(curveB), 1_000_000 * 1e18);
 
-        // Setup token-to-curve mappings
+        // Set bonding curve addresses in the tokens
+        tokenA.setBondingCurve(address(curveA));
+        tokenB.setBondingCurve(address(curveB));
+
+        // Setup token-to-curve mappings in the entry point as a fallback
         entryPoint.setMapping(address(tokenA), address(curveA));
         entryPoint.setMapping(address(tokenB), address(curveB));
 

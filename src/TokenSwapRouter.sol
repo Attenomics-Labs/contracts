@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./BondingCurve.sol";
 import "./AttenomicsCreatorEntryPoint.sol";
+import "./CreatorToken.sol";
 import "forge-std/console.sol";
 
 /**
@@ -171,7 +172,16 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
      * @return Bonding curve address
      */
     function getBondingCurveForToken(address token) internal view returns (address) {
-        address bondingCurve = entryPoint.getBondingCurveByToken(token);
+        address bondingCurve;
+        
+        // Try to get the bonding curve from the token directly
+        try CreatorToken(token).bondingCurve() returns (address curve) {
+            bondingCurve = curve;
+        } catch {
+            // If the call fails, it's not a valid token with a bonding curve
+            revert InvalidToken();
+        }
+        
         if (bondingCurve == address(0)) revert InvalidToken();
         
         // Check if the bonding curve has tokens, but don't revert if we're in the deployment phase
