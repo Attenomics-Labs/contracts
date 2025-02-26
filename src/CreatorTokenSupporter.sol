@@ -69,6 +69,10 @@ contract CreatorTokenSupporter is Ownable {
     )
         Ownable(msg.sender)
     {
+        require(_creatorToken != address(0), "Invalid token address");
+        require(_aiAgent != address(0), "Invalid AI agent address");
+        require(_gasLiteDropAddress != address(0), "Invalid GasliteDrop address");
+        
         creatorToken = _creatorToken;
         // Decode the distributor configuration data.
         DistributorConfig memory config = abi.decode(distributorConfigData, (DistributorConfig));

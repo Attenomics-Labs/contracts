@@ -31,9 +31,9 @@ contract BondingCurve {
     address public protocolFeeAddress;
 
     // Fee configuration (basis points)
-    uint256 public buyFeePercent = 50; // 0.5%
+    uint256 public buyFeePercent = 50;   // 0.5%
     uint256 public sellFeePercent = 100; // 1%
-    uint256 public constant feePrecision = 10_000;
+    uint256 public constant feePrecision = 10000;
 
     // Track ETH fees collected
     uint256 public lifetimeProtocolFees;
@@ -49,7 +49,7 @@ contract BondingCurve {
     uint256 public constant NORMALIZER = 1e12;
     uint256 public constant SCALING_FACTOR = 1e28;
     uint256 public constant BASE_PRICE = 1e2;
-    uint256 public constant SLOPE = 1e3;
+    uint256 public constant SLOPE      = 1e3;
 
     /**
      * purchaseMarketSupply represents the effective supply used for pricing.
@@ -57,24 +57,23 @@ contract BondingCurve {
      */
     uint256 public purchaseMarketSupply;
 
-    // Add initialization event
-    event BondingCurveInitialized(
-        address indexed token,
-        uint256 initialBalance
-    );
-
     // ======================
     //      Constructor
     // ======================
-    constructor(address _creatorToken, address _protocolFeeAddress) payable {
+    constructor(
+        address _creatorToken,
+        address _protocolFeeAddress
+    ) payable {
         require(_creatorToken != address(0), "Invalid token address");
         require(_protocolFeeAddress != address(0), "Invalid fee address");
         creatorToken = _creatorToken;
         protocolFeeAddress = _protocolFeeAddress;
         purchaseMarketSupply = 0;
 
-        // Emit initialization event
-        emit BondingCurveInitialized(_creatorToken, 0);
+        // If deployed with ETH, perform an initial buy.
+        if (msg.value > 0) {
+            _initialBuy(msg.sender, msg.value);
+        }
     }
 
     // ======================
@@ -90,8 +89,8 @@ contract BondingCurve {
     function getPrice(uint256 effectiveSupply, uint256 amount) public pure returns (uint256) {
         uint256 normSupply = effectiveSupply / NORMALIZER;
         uint256 normAmount = amount / NORMALIZER;
-        uint256 costUnits =
-            normAmount * BASE_PRICE + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
+        uint256 costUnits = normAmount * BASE_PRICE
+            + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
         return (costUnits * 1 ether) / SCALING_FACTOR;
     }
 
@@ -170,11 +169,6 @@ contract BondingCurve {
         }
     }
 
-    // Add a function to check if the curve is ready for trading
-    function isReadyForTrading() public view returns (bool) {
-        return ERC20(creatorToken).balanceOf(address(this)) > 0;
-    }
-
     /**
      * @notice Buys `amount` tokens.
      * Requirements:
@@ -183,7 +177,6 @@ contract BondingCurve {
      *   - The ETH sent must cover the cost (including fee).
      */
     function buy(uint256 amount) external payable returns (uint256) {
-        require(isReadyForTrading(), "Bonding curve not ready");
         require(amount > 0, "Amount must be > 0");
         require(amount <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
 
@@ -227,9 +220,7 @@ contract BondingCurve {
      * On sell, the effective supply is reduced and the tokens are returned to the contract.
      */
     function sell(uint256 amount) external returns (uint256) {
-        require(isReadyForTrading(), "Bonding curve not ready");
         require(amount > 0, "Amount must be > 0");
-        require(ERC20(creatorToken).totalSupply() > 0, "Token not initialized");
         ERC20 token = ERC20(creatorToken);
         require(token.balanceOf(msg.sender) >= amount, "Not enough tokens to sell");
         require(token.transferFrom(msg.sender, address(this), amount), "Token transfer failed");

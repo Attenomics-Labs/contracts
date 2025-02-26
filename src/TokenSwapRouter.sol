@@ -16,7 +16,7 @@ import "forge-std/console.sol";
 contract TokenSwapRouter is Ownable, ReentrancyGuard {
     // Protocol fee configuration (can be adjusted)
     uint256 public constant ROUTER_FEE = 10; // 0.1% additional fee
-    uint256 public constant FEE_PRECISION = 10_000;
+    uint256 public constant FEE_PRECISION = 10000;
     uint256 public constant MAX_SLIPPAGE = 1000; // 10% max slippage
 
     // Protocol fee collector
@@ -43,10 +43,17 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
     );
 
     event SwapError(
-        address indexed user, address indexed tokenA, address indexed tokenB, uint256 amountIn, string reason
+        address indexed user,
+        address indexed tokenA,
+        address indexed tokenB,
+        uint256 amountIn,
+        string reason
     );
 
-    constructor(address _feeCollector, address _entryPoint) Ownable(msg.sender) {
+    constructor(
+        address _feeCollector,
+        address _entryPoint
+    ) Ownable(msg.sender) {
         require(_feeCollector != address(0), "Invalid fee collector");
         require(_entryPoint != address(0), "Invalid entry point");
         feeCollector = _feeCollector;
@@ -60,24 +67,24 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         address tokenA,
         address tokenB,
         uint256 amountIn
-    )
-        public
-        view
-        returns (uint256 expectedOutput, uint256 ethValue, uint256 minOutput)
-    {
+    ) public view returns (
+        uint256 expectedOutput,
+        uint256 ethValue,
+        uint256 minOutput
+    ) {
         BondingCurve curveA = BondingCurve(payable(getBondingCurveForToken(tokenA)));
         BondingCurve curveB = BondingCurve(payable(getBondingCurveForToken(tokenB)));
 
         // Get ETH value from selling tokenA
         ethValue = curveA.getSellPrice(amountIn);
-
+        
         // Apply router fee
         uint256 routerFeeAmount = (ethValue * ROUTER_FEE) / FEE_PRECISION;
         ethValue -= routerFeeAmount;
 
         // Use the correct function from BondingCurve contract
         expectedOutput = curveB.getBuyPrice(ethValue);
-
+        
         // Calculate minimum output with max slippage
         minOutput = (expectedOutput * (FEE_PRECISION - MAX_SLIPPAGE)) / FEE_PRECISION;
     }
@@ -91,10 +98,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         uint256 amountIn,
         uint256 minAmountOut,
         uint256 deadline
-    )
-        external
-        nonReentrant
-    {
+    ) external nonReentrant {
         // Step 1: Initial checks
         if (block.timestamp > deadline) revert DeadlineExpired();
         if (tokenA == tokenB) revert InvalidToken();
@@ -106,7 +110,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
 
         // Get initial state
         uint256 initialETHBalance = address(this).balance;
-
+        
         // Transfer tokenA from user
         if (!ERC20(tokenA).transferFrom(msg.sender, address(this), amountIn)) {
             revert TokenTransferFailed();
@@ -169,9 +173,16 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
     function getBondingCurveForToken(address token) internal view returns (address) {
         address bondingCurve = entryPoint.getBondingCurveByToken(token);
         if (bondingCurve == address(0)) revert InvalidToken();
+        
+        // Check if the bonding curve has tokens, but don't revert if we're in the deployment phase
+        // This is determined by checking if the token has any supply yet
+        if (ERC20(token).totalSupply() > 0 && ERC20(token).balanceOf(bondingCurve) == 0) {
+            revert InvalidToken();
+        }
+        
         return bondingCurve;
     }
 
     // Allow contract to receive ETH
     receive() external payable {}
-}
+} 

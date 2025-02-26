@@ -24,7 +24,6 @@ error InvalidGasliteDropAddress();
  *         mappings from a hashed Twitter/X handle to both the deployed CreatorToken address
  *         and the associated NFT tokenId.
  */
-
 contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Mapping from hashed Twitter/X handle to deployed CreatorToken contract address.
     mapping(bytes32 => address) public creatorTokenByHandle;
@@ -46,7 +45,12 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     mapping(address => bool) public allowedAIAgents;
 
     event AIAgentUpdated(address agent, bool allowed);
-    event CreatorTokenDeployed(address indexed creator, address tokenAddress, bytes32 handle, uint256 tokenId);
+    event CreatorTokenDeployed(
+        address indexed creator,
+        address tokenAddress,
+        bytes32 handle,
+        uint256 tokenId
+    );
 
     constructor(address _gasliteDropAddress) ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
         if (_gasliteDropAddress == address(0)) revert InvalidGasliteDropAddress();
@@ -79,29 +83,32 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         string memory name,
         string memory symbol,
         string memory nftMetadataURI
-    )
-        external
-    {
+    ) external {
         CreatorToken.TokenConfig memory config = abi.decode(configData, (CreatorToken.TokenConfig));
         if (creatorTokenByHandle[config.handle] != address(0)) revert HandleAlreadyUsed();
         if (!allowedAIAgents[config.aiAgent]) revert AIAgentNotAllowed();
 
         address creator = msg.sender;
 
-        // Deploy CreatorToken first
+        // Deploy a new CreatorToken contract, passing the packed configuration data.
         CreatorToken token = new CreatorToken(
-            name, symbol, configData, distributorConfigData, vaultConfigData, creator, gasliteDropAddress
+            name,
+            symbol,
+            configData,
+            distributorConfigData,
+            vaultConfigData,
+            creator,
+            gasliteDropAddress
         );
 
-        // Initialize the token and its sub-contracts
-        token.initialize();
-
-        // Store the addresses after initialization
+        // Store the vault and supporter addresses
         creatorTokenByHandle[config.handle] = address(token);
         tokenIdByHandle[config.handle] = nextTokenId;
+
+        // Store the bonding curve address
         getBondingCurveByToken[address(token)] = token.bondingCurve();
 
-        // Mint the NFT to the creator
+        // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(creator, nextTokenId);
         _setTokenURI(nextTokenId, nftMetadataURI);
 
@@ -121,7 +128,8 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         return keccak256(abi.encodePacked(username));
     }
 
-    function totalSupply() public view returns (uint256) {
+
+     function totalSupply() public view returns (uint256) {
         return nextTokenId;
     }
 }

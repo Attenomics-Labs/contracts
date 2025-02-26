@@ -81,6 +81,13 @@ contract SelfTokenVault is Ownable {
             return 0;
         }
 
+        // Verify the actual balance matches or exceeds the expected initial balance
+        uint256 currentBalance = ERC20(token).balanceOf(address(this)) + withdrawn;
+        if (currentBalance < initialBalance) {
+            // If tokens haven't been fully transferred yet, return 0
+            return 0;
+        }
+
         // Immediate portion is the tokens not subject to vesting.
         uint256 immediateRelease = (initialBalance * (100 - vaultConfig.lockedPercentage)) / 100;
 
