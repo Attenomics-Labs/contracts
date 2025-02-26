@@ -57,21 +57,24 @@ contract BondingCurve {
      */
     uint256 public purchaseMarketSupply;
 
+    // Add initialization event
+    event BondingCurveInitialized(
+        address indexed token,
+        uint256 initialBalance
+    );
+
     // ======================
     //      Constructor
     // ======================
     constructor(address _creatorToken, address _protocolFeeAddress) payable {
         require(_creatorToken != address(0), "Invalid token address");
         require(_protocolFeeAddress != address(0), "Invalid fee address");
-        require(ERC20(_creatorToken).totalSupply() > 0, "Token not initialized");
         creatorToken = _creatorToken;
         protocolFeeAddress = _protocolFeeAddress;
         purchaseMarketSupply = 0;
 
-        // If deployed with ETH, perform an initial buy.
-        if (msg.value > 0) {
-            _initialBuy(msg.sender, msg.value);
-        }
+        // Emit initialization event
+        emit BondingCurveInitialized(_creatorToken, 0);
     }
 
     // ======================
@@ -167,6 +170,11 @@ contract BondingCurve {
         }
     }
 
+    // Add a function to check if the curve is ready for trading
+    function isReadyForTrading() public view returns (bool) {
+        return ERC20(creatorToken).balanceOf(address(this)) > 0;
+    }
+
     /**
      * @notice Buys `amount` tokens.
      * Requirements:
@@ -175,6 +183,7 @@ contract BondingCurve {
      *   - The ETH sent must cover the cost (including fee).
      */
     function buy(uint256 amount) external payable returns (uint256) {
+        require(isReadyForTrading(), "Bonding curve not ready");
         require(amount > 0, "Amount must be > 0");
         require(amount <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
 
@@ -218,7 +227,9 @@ contract BondingCurve {
      * On sell, the effective supply is reduced and the tokens are returned to the contract.
      */
     function sell(uint256 amount) external returns (uint256) {
+        require(isReadyForTrading(), "Bonding curve not ready");
         require(amount > 0, "Amount must be > 0");
+        require(ERC20(creatorToken).totalSupply() > 0, "Token not initialized");
         ERC20 token = ERC20(creatorToken);
         require(token.balanceOf(msg.sender) >= amount, "Not enough tokens to sell");
         require(token.transferFrom(msg.sender, address(this), amount), "Token transfer failed");

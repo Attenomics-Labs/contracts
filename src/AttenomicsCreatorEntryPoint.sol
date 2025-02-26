@@ -88,19 +88,20 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
         address creator = msg.sender;
 
-        // Deploy a new CreatorToken contract, passing the packed configuration data.
+        // Deploy CreatorToken first
         CreatorToken token = new CreatorToken(
             name, symbol, configData, distributorConfigData, vaultConfigData, creator, gasliteDropAddress
         );
 
-        // Store the vault and supporter addresses
+        // Initialize the token and its sub-contracts
+        token.initialize();
+
+        // Store the addresses after initialization
         creatorTokenByHandle[config.handle] = address(token);
         tokenIdByHandle[config.handle] = nextTokenId;
-
-        // Store the bonding curve address
         getBondingCurveByToken[address(token)] = token.bondingCurve();
 
-        // Mint the NFT to the creator. This NFT is non-transferable.
+        // Mint the NFT to the creator
         _safeMint(creator, nextTokenId);
         _setTokenURI(nextTokenId, nftMetadataURI);
 
