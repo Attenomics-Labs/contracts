@@ -76,6 +76,12 @@ contract BondingCurveTest is Test {
         assertEq(bondingCurve.getSellPriceAfterFees(sellAmount), afterFee);
     }
 
+    function testGetBuyPriceAfterFees() public{
+        uint256 buyAmount = 100 * 1e18;
+        uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
+        console.log("Buy cost:", buyCost);
+    }
+
     function testBuyAndSell() public {
         uint256 buyAmount = 100 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);

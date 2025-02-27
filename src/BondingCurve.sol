@@ -31,7 +31,7 @@ contract BondingCurve {
     address public protocolFeeAddress;
 
     // Fee configuration (basis points)
-    uint256 public buyFeePercent = 50;   // 0.5%
+    uint256 public buyFeePercent = 50; // 0.5%
     uint256 public sellFeePercent = 100; // 1%
     uint256 public constant feePrecision = 10000;
 
@@ -49,7 +49,7 @@ contract BondingCurve {
     uint256 public constant NORMALIZER = 1e12;
     uint256 public constant SCALING_FACTOR = 1e28;
     uint256 public constant BASE_PRICE = 1e2;
-    uint256 public constant SLOPE      = 1e3;
+    uint256 public constant SLOPE = 1e3;
 
     /**
      * purchaseMarketSupply represents the effective supply used for pricing.
@@ -60,10 +60,7 @@ contract BondingCurve {
     // ======================
     //      Constructor
     // ======================
-    constructor(
-        address _creatorToken,
-        address _protocolFeeAddress
-    ) payable {
+    constructor(address _creatorToken, address _protocolFeeAddress) payable {
         require(_creatorToken != address(0), "Invalid token address");
         require(_protocolFeeAddress != address(0), "Invalid fee address");
         creatorToken = _creatorToken;
@@ -86,11 +83,16 @@ contract BondingCurve {
      * where normSupply and normAmount are normalized by NORMALIZER.
      * The final cost (in wei) is: (costUnits * 1 ether) / SCALING_FACTOR.
      */
-    function getPrice(uint256 effectiveSupply, uint256 amount) public pure returns (uint256) {
+    function getPrice(
+        uint256 effectiveSupply,
+        uint256 amount
+    ) public pure returns (uint256) {
         uint256 normSupply = effectiveSupply / NORMALIZER;
         uint256 normAmount = amount / NORMALIZER;
-        uint256 costUnits = normAmount * BASE_PRICE
-            + SLOPE * (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
+        uint256 costUnits = normAmount *
+            BASE_PRICE +
+            SLOPE *
+            (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
         return (costUnits * 1 ether) / SCALING_FACTOR;
     }
 
@@ -101,22 +103,70 @@ contract BondingCurve {
 
     /// @dev Returns the sell price (without fees) based on reducing the effective supply.
     function getSellPrice(uint256 amount) public view returns (uint256) {
-        require(purchaseMarketSupply >= amount, "Insufficient effective supply");
+        require(
+            purchaseMarketSupply >= amount,
+            "Insufficient effective supply"
+        );
         return getPrice(purchaseMarketSupply - amount, amount);
     }
 
     /// @dev Returns the buy price including a fee.
-    function getBuyPriceAfterFees(uint256 amount) public view returns (uint256) {
+    function getBuyPriceAfterFees(
+        uint256 amount
+    ) public view returns (uint256) {
         uint256 rawPrice = getBuyPrice(amount);
         uint256 fee = (rawPrice * buyFeePercent) / feePrecision;
         return rawPrice + fee;
     }
 
     /// @dev Returns the sell price after subtracting a fee.
-    function getSellPriceAfterFees(uint256 amount) public view returns (uint256) {
+    function getSellPriceAfterFees(
+        uint256 amount
+    ) public view returns (uint256) {
         uint256 rawPrice = getSellPrice(amount);
         uint256 fee = (rawPrice * sellFeePercent) / feePrecision;
         return rawPrice - fee;
+    }
+
+    // From ETH
+    /**
+     * @notice Calculates how many tokens you can buy for a given ETH amount.
+     * Uses binary search to find the maximum number of tokens that can be purchased.
+     */
+    function getTokensForEth(uint256 ethAmount) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = ethAmount * 1e18; // A large upper bound for tokens
+        for (uint256 i = 0; i < 20; i++) {
+            uint256 mid = (low + high) / 2;
+            uint256 price = getBuyPriceAfterFees(mid);
+            if (price <= ethAmount) {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+
+    /**
+     * @notice Calculates how many tokens need to be sold to receive the given ETH amount.
+     * Uses binary search to determine the required token amount.
+     */
+    function getTokensToSellForEth(
+        uint256 ethAmount
+    ) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = purchaseMarketSupply;
+        for (uint256 i = 0; i < 20; i++) {
+            uint256 mid = (low + high) / 2;
+            uint256 price = getSellPriceAfterFees(mid);
+            if (price >= ethAmount) {
+                high = mid;
+            } else {
+                low = mid;
+            }
+        }
+        return high;
     }
 
     // ======================
@@ -141,7 +191,10 @@ contract BondingCurve {
         }
         uint256 tokensToBuy = low;
         require(tokensToBuy > 0, "No tokens for initial buy");
-        require(tokensToBuy <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
+        require(
+            tokensToBuy <= ERC20(creatorToken).balanceOf(address(this)),
+            "Not enough tokens available"
+        );
 
         uint256 rawPrice = getBuyPrice(tokensToBuy);
         uint256 totalCost = getBuyPriceAfterFees(tokensToBuy);
@@ -160,7 +213,10 @@ contract BondingCurve {
 
         // Update effective supply and transfer tokens.
         purchaseMarketSupply += tokensToBuy;
-        require(ERC20(creatorToken).transfer(buyer, tokensToBuy), "Transfer failed");
+        require(
+            ERC20(creatorToken).transfer(buyer, tokensToBuy),
+            "Transfer failed"
+        );
 
         // Refund any leftover ETH.
         uint256 refund = ethAmount - totalCost;
@@ -178,7 +234,10 @@ contract BondingCurve {
      */
     function buy(uint256 amount) external payable returns (uint256) {
         require(amount > 0, "Amount must be > 0");
-        require(amount <= ERC20(creatorToken).balanceOf(address(this)), "Not enough tokens available");
+        require(
+            amount <= ERC20(creatorToken).balanceOf(address(this)),
+            "Not enough tokens available"
+        );
 
         uint256 cost = getBuyPriceAfterFees(amount);
         require(msg.value >= cost, "Insufficient ETH for buy");
@@ -201,7 +260,10 @@ contract BondingCurve {
         purchaseMarketSupply += amount;
 
         // Transfer tokens from this contract to the buyer.
-        require(ERC20(creatorToken).transfer(msg.sender, amount), "Token transfer failed");
+        require(
+            ERC20(creatorToken).transfer(msg.sender, amount),
+            "Token transfer failed"
+        );
 
         // Refund any extra ETH.
         if (msg.value > cost) {
@@ -222,8 +284,14 @@ contract BondingCurve {
     function sell(uint256 amount) external returns (uint256) {
         require(amount > 0, "Amount must be > 0");
         ERC20 token = ERC20(creatorToken);
-        require(token.balanceOf(msg.sender) >= amount, "Not enough tokens to sell");
-        require(token.transferFrom(msg.sender, address(this), amount), "Token transfer failed");
+        require(
+            token.balanceOf(msg.sender) >= amount,
+            "Not enough tokens to sell"
+        );
+        require(
+            token.transferFrom(msg.sender, address(this), amount),
+            "Token transfer failed"
+        );
 
         uint256 rawSellPrice = getSellPrice(amount);
         uint256 fee = (rawSellPrice * sellFeePercent) / feePrecision;
@@ -244,7 +312,10 @@ contract BondingCurve {
         require(purchaseMarketSupply >= amount, "Effective supply underflow");
         purchaseMarketSupply -= amount;
 
-        require(address(this).balance >= netSellPrice, "Not enough ETH in curve");
+        require(
+            address(this).balance >= netSellPrice,
+            "Not enough ETH in curve"
+        );
         payable(msg.sender).transfer(netSellPrice);
 
         return netSellPrice;
@@ -257,7 +328,10 @@ contract BondingCurve {
      * @notice Allows anyone to deposit tokens to the bonding curve (increasing available tokens).
      */
     function provideLiquidity(uint256 amount) external {
-        require(ERC20(creatorToken).transferFrom(msg.sender, address(this), amount), "Token transfer failed");
+        require(
+            ERC20(creatorToken).transferFrom(msg.sender, address(this), amount),
+            "Token transfer failed"
+        );
     }
 
     /**
@@ -272,5 +346,6 @@ contract BondingCurve {
 
     // Accept ETH deposits.
     receive() external payable {}
+
     fallback() external payable {}
 }
