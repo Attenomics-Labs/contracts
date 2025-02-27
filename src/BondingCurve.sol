@@ -128,25 +128,21 @@ contract BondingCurve {
         return rawPrice - fee;
     }
 
-    // From ETH
-    /**
-     * @notice Calculates how many tokens you can buy for a given ETH amount.
-     * Uses binary search to find the maximum number of tokens that can be purchased.
-     */
-    function getTokensForEth(uint256 ethAmount) public view returns (uint256) {
-        uint256 low = 0;
-        uint256 high = ethAmount * 1e18; // A large upper bound for tokens
-        for (uint256 i = 0; i < 20; i++) {
-            uint256 mid = (low + high) / 2;
-            uint256 price = getBuyPriceAfterFees(mid);
-            if (price <= ethAmount) {
-                low = mid;
-            } else {
-                high = mid;
-            }
+function getTokensForEth(uint256 ethAmount) public view returns (uint256) {
+    uint256 low = 0;
+    uint256 high = (ethAmount * NORMALIZER) / BASE_PRICE; // Set a reasonable upper bound
+    for (uint256 i = 0; i < 20; i++) {
+        uint256 mid = (low + high) / 2;
+        uint256 price = getBuyPriceAfterFees(mid);
+        if (price <= ethAmount) {
+            low = mid;
+        } else {
+            high = mid;
         }
-        return low;
     }
+    return low;
+}
+
 
     /**
      * @notice Calculates how many tokens need to be sold to receive the given ETH amount.
