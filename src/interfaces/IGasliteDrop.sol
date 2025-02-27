@@ -13,7 +13,9 @@ interface IGasliteDrop {
         address _nft,
         address[] calldata _addresses,
         uint256[] calldata _tokenIds
-    ) external payable;
+    )
+        external
+        payable;
 
     /**
      * @notice Airdrop ERC20 tokens to a list of addresses
@@ -27,15 +29,14 @@ interface IGasliteDrop {
         address[] calldata _addresses,
         uint256[] calldata _amounts,
         uint256 _totalAmount
-    ) external payable;
+    )
+        external
+        payable;
 
     /**
      * @notice Airdrop ETH to a list of addresses
      * @param _addresses The addresses to airdrop to
      * @param _amounts The amounts to airdrop
      */
-    function airdropETH(
-        address[] calldata _addresses,
-        uint256[] calldata _amounts
-    ) external payable;
+    function airdropETH(address[] calldata _addresses, uint256[] calldata _amounts) external payable;
 }

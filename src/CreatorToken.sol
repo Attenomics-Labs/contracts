@@ -68,18 +68,24 @@ contract CreatorToken is ERC20 {
             "Invalid percentage split"
         );
 
+        require(_creator != address(0), "Invalid creator");
+        require(gasLiteDropContractAddress != address(0), "Invalid gaslite");
+
         creator = _creator;
         aiAgent = config.aiAgent;
         handle = config.handle;
         totalERC20Supply = config.totalSupply;
 
-        // Mint tokens
+        // Calculate token amounts
         uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
         uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
         uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
 
+        // First mint tokens to this contract (temporary)
+        _mint(address(this), config.totalSupply);
+
         // Deploy the SelfTokenVault (x%).
-        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData , selfTokens);
+        SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData, selfTokens);
         selfTokenVault = address(vault);
 
         // Deploy the BondingCurve (y%).
@@ -87,23 +93,23 @@ contract CreatorToken is ERC20 {
         bondingCurve = address(curve);
 
         // Deploy the CreatorTokenSupporter (z%), owned by the AI agent.
-        CreatorTokenSupporter supporter = new CreatorTokenSupporter(address(this), config.aiAgent, distributorConfigData, gasLiteDropContractAddress);
+        CreatorTokenSupporter supporter = new CreatorTokenSupporter(
+            address(this), 
+            config.aiAgent, 
+            distributorConfigData, 
+            gasLiteDropContractAddress
+        );
         supporterContract = address(supporter);
 
-
-
-        _mint(selfTokenVault, selfTokens);
-        _mint(bondingCurve, marketTokens);
-        _mint(supporterContract, supporterTokens);
+        // Now transfer tokens to the respective contracts
+        _transfer(address(this), selfTokenVault, selfTokens);
+        _transfer(address(this), bondingCurve, marketTokens);
+        _transfer(address(this), supporterContract, supporterTokens);
     }
 
     // Optional: override ERC20 decimals.
     function decimals() public pure override returns (uint8) {
         return 18;
-    }
-
-    function getBondingCurveAddress() public view returns (address) {
-        return bondingCurve;
     }
 
     // Add these getter functions

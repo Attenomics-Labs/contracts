@@ -22,12 +22,12 @@ contract SelfTokenVault is Ownable {
 
     // Vault configuration struct.
     struct VaultConfig {
-        uint256 dripPercentage;   // Percentage of the locked tokens to release per interval.
-        uint256 dripInterval;     // Interval (in seconds) between drips.
-        uint256 lockTime;         // Lock period (in seconds) before vesting starts.
+        uint256 dripPercentage; // Percentage of the locked tokens to release per interval.
+        uint256 dripInterval; // Interval (in seconds) between drips.
+        uint256 lockTime; // Lock period (in seconds) before vesting starts.
         uint256 lockedPercentage; // Percentage of tokens that are subject to vesting (0-100).
     }
-    
+
     VaultConfig public vaultConfig;
 
     // The initial total tokens deposited in the vault.
@@ -44,7 +44,14 @@ contract SelfTokenVault is Ownable {
      * @param _creator The address that will own the vault (typically the creator).
      * @param selfVaultConfig Packed configuration data encoding a VaultConfig struct.
      */
-    constructor(address _token, address _creator, bytes memory selfVaultConfig , uint256 _initialBalance) Ownable(_creator) {
+    constructor(
+        address _token,
+        address _creator,
+        bytes memory selfVaultConfig,
+        uint256 _initialBalance
+    )
+        Ownable(_creator)
+    {
         token = _token;
         // Decode the vault configuration data.
         VaultConfig memory config = abi.decode(selfVaultConfig, (VaultConfig));
@@ -74,9 +81,16 @@ contract SelfTokenVault is Ownable {
             return 0;
         }
 
+        // Verify the actual balance matches or exceeds the expected initial balance
+        uint256 currentBalance = ERC20(token).balanceOf(address(this)) + withdrawn;
+        if (currentBalance < initialBalance) {
+            // If tokens haven't been fully transferred yet, return 0
+            return 0;
+        }
+
         // Immediate portion is the tokens not subject to vesting.
         uint256 immediateRelease = (initialBalance * (100 - vaultConfig.lockedPercentage)) / 100;
-        
+
         uint256 vested;
         // Vesting only starts after the lock period.
         if (block.timestamp > startTime + vaultConfig.lockTime) {
@@ -90,7 +104,7 @@ contract SelfTokenVault is Ownable {
                 vested = lockedAmount;
             }
         }
-        
+
         // Total tokens available for withdrawal.
         uint256 totalAvailable = immediateRelease + vested;
         if (totalAvailable > initialBalance) {
