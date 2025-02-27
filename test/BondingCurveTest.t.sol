@@ -10,7 +10,8 @@ contract BondingCurveTest is Test {
     TestToken public token;
 
     // We'll designate a protocol fee address.
-    address public protocolFeeAddress = address(0x1234567890123456789012345678901234567890);
+    address public protocolFeeAddress =
+        address(0x1234567890123456789012345678901234567890);
 
     // Mint 10,000,000 tokens of 18 decimals (for testing liquidity)
     uint256 public constant INITIAL_SUPPLY = 1_000_000_000_000 * 1e18; // 1000 billion
@@ -43,9 +44,12 @@ contract BondingCurveTest is Test {
         // 3) final cost = costUnits * (1 ether / SCALING_FACTOR).
         uint256 normS = supply / bondingCurve.NORMALIZER();
         uint256 normA = amount / bondingCurve.NORMALIZER();
-        uint256 costUnits =
-            normA * bondingCurve.BASE_PRICE() + bondingCurve.SLOPE() * (normS * normA + (normA * (normA - 1)) / 2);
-        uint256 expected = (costUnits * 1 ether) / bondingCurve.SCALING_FACTOR();
+        uint256 costUnits = normA *
+            bondingCurve.BASE_PRICE() +
+            bondingCurve.SLOPE() *
+            (normS * normA + (normA * (normA - 1)) / 2);
+        uint256 expected = (costUnits * 1 ether) /
+            bondingCurve.SCALING_FACTOR();
         uint256 actual = bondingCurve.getPrice(supply, amount);
 
         assertEq(actual, expected);
@@ -55,7 +59,8 @@ contract BondingCurveTest is Test {
         // Check that getBuyPriceAfterFees = getBuyPrice(...) + 0.5% fee.
         uint256 amount = 100 * 1e18;
         uint256 rawPrice = bondingCurve.getBuyPrice(amount);
-        uint256 expectedFee = (rawPrice * bondingCurve.buyFeePercent()) / bondingCurve.feePrecision();
+        uint256 expectedFee = (rawPrice * bondingCurve.buyFeePercent()) /
+            bondingCurve.feePrecision();
         uint256 actualBuyPrice = bondingCurve.getBuyPriceAfterFees(amount);
         assertEq(actualBuyPrice, rawPrice + expectedFee);
     }
@@ -70,16 +75,36 @@ contract BondingCurveTest is Test {
         // Now check the sell pricing.
         uint256 sellAmount = 100 * 1e18;
         uint256 rawPrice = bondingCurve.getSellPrice(sellAmount);
-        uint256 fee = (rawPrice * bondingCurve.sellFeePercent()) / bondingCurve.feePrecision();
+        uint256 fee = (rawPrice * bondingCurve.sellFeePercent()) /
+            bondingCurve.feePrecision();
         uint256 afterFee = rawPrice - fee;
 
         assertEq(bondingCurve.getSellPriceAfterFees(sellAmount), afterFee);
     }
 
-    function testGetBuyPriceAfterFees() public{
+    function testGetBuyPriceAfterFees() public {
         uint256 buyAmount = 100 * 1e18;
         uint256 buyCost = bondingCurve.getBuyPriceAfterFees(buyAmount);
         console.log("Buy cost:", buyCost);
+    }
+
+    function testGetBuyPriceFromEth() external {
+        uint256 ethToBuy = 1 ether;
+
+        // Get the estimated number of tokens that can be bought with 1 ETH
+        uint256 buyAmount = bondingCurve.getTokensForEth(ethToBuy);
+        console.log("Buy amount:", buyAmount);
+
+        // Ensure we got a valid amount of tokens
+        require(buyAmount > 0, "Token amount should be greater than 0");
+
+        // Get the actual ETH cost to buy this amount of tokens
+        uint256 actualPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
+        console.log("Expected ETH spent:", ethToBuy);
+        console.log("Actual ETH spent:", actualPrice);
+
+        // Verify that the ETH spent is approximately 1 ETH (allowing minor rounding differences)
+        assertApproxEqAbs(actualPrice, ethToBuy, 1e16); // Allow ~0.01 ETH margin
     }
 
     function testBuyAndSell() public {
@@ -211,8 +236,9 @@ contract BondingCurveTest is Test {
 
         // Calculate what 10K tokens would cost at an effective supply of 0.
         uint256 initialCostFor10K = bondingCurve.getPrice(0, buyAmount10K);
-        uint256 initialCostFor10KAfterFees =
-            initialCostFor10K + (initialCostFor10K * bondingCurve.buyFeePercent()) / bondingCurve.feePrecision();
+        uint256 initialCostFor10KAfterFees = initialCostFor10K +
+            (initialCostFor10K * bondingCurve.buyFeePercent()) /
+            bondingCurve.feePrecision();
 
         // The cost after 1M tokens should be higher than the initial cost.
         assertTrue(cost10KAfter > initialCostFor10KAfterFees);
@@ -266,7 +292,10 @@ contract BondingCurveTest is Test {
 
         // Calculate profit (note: with fees, a round-trip may still be negative).
         int256 profit = int256(sellPayout) - int256(cost10K);
-        console.log("Buyer A profit (wei):", uint256(profit < 0 ? int256(0) : profit));
+        console.log(
+            "Buyer A profit (wei):",
+            uint256(profit < 0 ? int256(0) : profit)
+        );
     }
 
     /// @notice Run a random buy–sell sequence over several iterations.
