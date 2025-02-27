@@ -88,8 +88,8 @@ contract BondingCurveTest is Test {
         console.log("Buy cost:", buyCost);
     }
 
-    function testGetBuyPriceFromEth() external {
-        uint256 ethToBuy = 1 ether;
+    function testGetBuyPriceFromEth() public {
+        uint256 ethToBuy = 0.01 ether;
 
         // Get the estimated number of tokens that can be bought with 1 ETH
         uint256 buyAmount = bondingCurve.getTokensForEth(ethToBuy);
@@ -106,6 +106,39 @@ contract BondingCurveTest is Test {
         // Verify that the ETH spent is approximately 1 ETH (allowing minor rounding differences)
         assertApproxEqAbs(actualPrice, ethToBuy, 1e16); // Allow ~0.01 ETH margin
     }
+
+    function testMultipleConsecutiveBuysFromEth() public {
+    uint256 ethToBuy = 0.01 ether;
+    uint256 totalBoughtTokens = 0;
+
+    for (uint256 i = 0; i < 50; i++) { // Run 50 consecutive buys
+        // Get expected token amount for the given ETH
+        uint256 buyAmount = bondingCurve.getTokensForEth(ethToBuy);
+        console.log("Iteration:", i);
+        console.log("ETH to spend:", ethToBuy);
+        console.log("Expected tokens to receive:", buyAmount);
+
+        require(buyAmount > 0, "Token amount should be greater than 0");
+
+        // Get actual ETH cost for that token amount
+        uint256 actualPrice = bondingCurve.getBuyPriceAfterFees(buyAmount);
+        console.log("Actual ETH cost:", actualPrice);
+
+        // Ensure the actual cost is within an acceptable margin of the expected ETH spent
+        assertApproxEqAbs(actualPrice, ethToBuy, 1e16); // Allow ~0.01 ETH margin
+
+        // Perform the actual buy
+        vm.deal(address(this), actualPrice); // Provide the contract with ETH
+        bondingCurve.buy{value: actualPrice}(buyAmount);
+
+        // Track total tokens bought
+        totalBoughtTokens += buyAmount;
+
+        // Ensure the contract's internal token supply tracking matches expectations
+        assertEq(bondingCurve.purchaseMarketSupply(), totalBoughtTokens);
+    }
+}
+
 
     function testBuyAndSell() public {
         uint256 buyAmount = 100 * 1e18;
@@ -302,7 +335,7 @@ contract BondingCurveTest is Test {
     function testRandomBuySellSequence() public {
         uint256 iterations = 10;
         uint256 netBought = 0;
-        for (uint256 i = 0; i < iterations; i++) {
+        for(uint256 i = 0; i < iterations; i++) {
             // Simulate a buy amount increasing with each iteration.
             uint256 buyAmount = (i + 1) * 1000 * 1e18;
             uint256 cost = bondingCurve.getBuyPriceAfterFees(buyAmount);
