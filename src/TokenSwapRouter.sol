@@ -32,6 +32,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
     error InvalidToken();
     error SwapOperationFailed();
     error TokenTransferFailed();
+    error InsufficientOutput();
 
     // Events
     event TokenSwap(
@@ -126,9 +127,12 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
                 payable(feeCollector).transfer(routerFeeAmount);
             }
 
-            try curveB.buy{value: buyAmount}(buyAmount) returns (uint256 amountOut) {
+            // Calculate the number of tokens that can be bought with the buyAmount of ETH
+            uint256 tokensToBuy = curveB.getTokensForEth(buyAmount);
+
+            try curveB.buy{value: buyAmount}(tokensToBuy) returns (uint256 amountOut) {
                 // Verify minimum output
-                if (amountOut < minAmountOut) revert ExcessiveSlippage();
+                if (amountOut < minAmountOut) revert InsufficientOutput();
 
                 // Transfer tokenB to user
                 if (!ERC20(tokenB).transfer(msg.sender, amountOut)) {
