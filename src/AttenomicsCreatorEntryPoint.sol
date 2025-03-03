@@ -41,6 +41,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
     // Mapping of allowed AI agents.
     mapping(address => bool) public allowedAIAgents;
 
+    // Mapping from CreatorToken address to its BondingCurve address
+    mapping(address => address) public bondingCurveByToken;
+
     event AIAgentUpdated(address agent, bool allowed);
     event CreatorTokenDeployed(
         address indexed creator,
@@ -103,6 +106,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         tokenIdByHandle[config.handle] = nextTokenId;
         tokenIdByCreatorToken[address(token)] = nextTokenId;
 
+        // Store the bonding curve address
+        bondingCurveByToken[address(token)] = token.bondingCurve();
+
         // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(creator, nextTokenId);
         _setTokenURI(nextTokenId, nftMetadataURI);
@@ -126,5 +132,14 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
      function totalSupply() public view returns (uint256) {
         return nextTokenId;
+    }
+
+    /**
+     * @notice Gets the bonding curve address for a given token
+     * @param token The address of the CreatorToken
+     * @return The address of the associated bonding curve
+     */
+    function getBondingCurveByToken(address token) external view returns (address) {
+        return bondingCurveByToken[token];
     }
 }
