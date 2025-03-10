@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./SelfTokenVault.sol";
-import "./BondingCurve.sol";
-import "./CreatorTokenSupporter.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SelfTokenVault} from "./SelfTokenVault.sol";
+import {BondingCurve} from "./BondingCurve.sol";
+import {CreatorTokenSupporter} from "./CreatorTokenSupporter.sol";
 
 /*
 ─────────────────────────────────────────────
@@ -67,15 +67,21 @@ contract CreatorToken is ERC20 {
         TokenConfig memory config = abi.decode(configData, (TokenConfig));
         require(config.selfPercent + config.marketPercent + config.supporterPercent == 100, "Invalid percentage split");
 
+        require(_creator != address(0), "Invalid creator");
+        require(gasLiteDropContractAddress != address(0), "Invalid gaslite");
+
         creator = _creator;
         aiAgent = config.aiAgent;
         handle = config.handle;
         totalERC20Supply = config.totalSupply;
 
-        // Mint tokens
+        // Calculate token amounts
         uint256 selfTokens = (config.totalSupply * config.selfPercent) / 100;
         uint256 marketTokens = (config.totalSupply * config.marketPercent) / 100;
         uint256 supporterTokens = (config.totalSupply * config.supporterPercent) / 100;
+
+        // First mint tokens to this contract (temporary)
+        _mint(address(this), config.totalSupply);
 
         // Deploy the SelfTokenVault (x%).
         SelfTokenVault vault = new SelfTokenVault(address(this), _creator, vaultConfigData, selfTokens);
@@ -93,6 +99,7 @@ contract CreatorToken is ERC20 {
         _mint(selfTokenVault, selfTokens);
         _mint(bondingCurve, marketTokens);
         _mint(supporterContract, supporterTokens);
+
     }
 
     // Optional: override ERC20 decimals.

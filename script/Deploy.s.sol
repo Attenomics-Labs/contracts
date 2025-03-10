@@ -11,6 +11,7 @@ import {SelfTokenVault} from "../src/SelfTokenVault.sol";
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {GasliteDrop} from "../src/GasliteDrop.sol";
 import {CreatorTokenSupporter} from "../src/CreatorTokenSupporter.sol";
+import {TokenSwapRouter} from "../src/TokenSwapRouter.sol";
 
 contract Deploy is Script {
     // Store deployed addresses
@@ -22,11 +23,12 @@ contract Deploy is Script {
     address public supporter;
     address public protocolFeeAddress;
     address public aiAgent;
+    address public tokenSwapRouter;
 
     function run() external {
         // Get private key from environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        
+
         // Start broadcasting transactions with higher gas price to replace pending tx
         vm.startBroadcast(deployerPrivateKey);
 
@@ -38,13 +40,13 @@ contract Deploy is Script {
         protocolFeeAddress = vm.addr(deployerPrivateKey);
         aiAgent = vm.addr(deployerPrivateKey);
 
-        // 1. Deploy GasliteDrop
+        // Deploy GasliteDrop first
         GasliteDrop gasliteDropContract = new GasliteDrop();
         gasliteDrop = address(gasliteDropContract);
         console2.log("GasliteDrop:", gasliteDrop);
 
-        // 2. Deploy EntryPoint
-        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint();
+        // Deploy EntryPoint with GasliteDrop address
+        AttenomicsCreatorEntryPoint entryPointContract = new AttenomicsCreatorEntryPoint(address(gasliteDropContract));
         entryPoint = address(entryPointContract);
         console2.log("EntryPoint:", entryPoint);
 
@@ -94,22 +96,25 @@ contract Deploy is Script {
             "SCT",
             "ipfs://sample-metadata-uri"
         );
-        
+
         // Add a small delay to ensure state is finalized
         vm.warp(block.timestamp + 1);
-        
+
         // Get the deployed addresses from the entry point
         creatorToken = entryPointContract.creatorTokenByHandle(handle);
         CreatorToken token = CreatorToken(creatorToken);
-        
 
-        
         selfTokenVault = token.selfTokenVault();
         supporter = token.supporterContract();
         bondingCurve = token.bondingCurve(); // Get the existing bonding curve
-        
+
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
+
+        // Deploy TokenSwapRouter
+        TokenSwapRouter router = new TokenSwapRouter(protocolFeeAddress, entryPoint);
+        tokenSwapRouter = address(router);
+        console2.log("TokenSwapRouter:", tokenSwapRouter);
 
         // Stop broadcasting transactions
         vm.stopBroadcast();
@@ -121,6 +126,7 @@ contract Deploy is Script {
         console2.log("EntryPoint:", entryPoint);
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
+        console2.log("TokenSwapRouter:", tokenSwapRouter);
         console2.log("Protocol Fee Address:", protocolFeeAddress);
         console2.log("AI Agent:", aiAgent);
     }

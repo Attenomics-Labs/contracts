@@ -13,6 +13,7 @@ import {GasliteDrop} from "./GasliteDrop.sol";
 error NonTransferableNFT();
 error HandleAlreadyUsed();
 error AIAgentNotAllowed();
+error InvalidGasliteDropAddress();
 /**
  * @title AttenomicsCreatorEntryPoint
  * @notice This contract acts as a single, reliable onboarding entry point.
@@ -35,14 +36,13 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
     uint256 public nextTokenId;
 
-    address gasliteDropAddress;
+    address public gasliteDropAddress;
 
     // Mapping of allowed AI agents.
     mapping(address => bool) public allowedAIAgents;
 
-    // Add these mappings near the other state variables
-    mapping(bytes32 => address) public tokenVaultByHandle;
-    mapping(bytes32 => address) public tokenSupporterByHandle;
+    // Mapping from CreatorToken address to its BondingCurve address
+    mapping(address => address) public bondingCurveByToken;
 
     event AIAgentUpdated(address agent, bool allowed);
     event CreatorTokenDeployed(
@@ -52,8 +52,9 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
         uint256 tokenId
     );
 
-    constructor() ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
-        gasliteDropAddress = address(new GasliteDrop());
+    constructor(address _gasliteDropAddress) ERC721("AttenomicsCreator", "ACNFT") Ownable(msg.sender) {
+        if (_gasliteDropAddress == address(0)) revert InvalidGasliteDropAddress();
+        gasliteDropAddress = _gasliteDropAddress;
     }
 
     /**
@@ -100,12 +101,13 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
             gasliteDropAddress
         );
 
-        // Store the vault and supporter addresses
-        tokenVaultByHandle[config.handle] = token.getVaultAddress();
-        tokenSupporterByHandle[config.handle] = token.getSupporterAddress();
+        // Store the token address by handle
         creatorTokenByHandle[config.handle] = address(token);
-        tokenIdByCreatorToken[address(token)] = nextTokenId;
         tokenIdByHandle[config.handle] = nextTokenId;
+        tokenIdByCreatorToken[address(token)] = nextTokenId;
+
+        // Store the bonding curve address
+        bondingCurveByToken[address(token)] = token.bondingCurve();
 
         // Mint the NFT to the creator. This NFT is non-transferable.
         _safeMint(creator, nextTokenId);
@@ -130,5 +132,14 @@ contract AttenomicsCreatorEntryPoint is ERC721URIStorage, Ownable {
 
      function totalSupply() public view returns (uint256) {
         return nextTokenId;
+    }
+
+    /**
+     * @notice Gets the bonding curve address for a given token
+     * @param token The address of the CreatorToken
+     * @return The address of the associated bonding curve
+     */
+    function getBondingCurveByToken(address token) external view returns (address) {
+        return bondingCurveByToken[token];
     }
 }

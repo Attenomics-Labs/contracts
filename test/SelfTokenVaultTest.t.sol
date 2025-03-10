@@ -3,11 +3,36 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/SelfTokenVault.sol";
-import "../src/CreatorToken.sol";
+
+// Create a minimal mock token for testing
+contract MockToken is Test {
+    mapping(address => uint256) private _balances;
+    uint256 private _totalSupply;
+
+    function mint(address account, uint256 amount) public {
+        _balances[account] += amount;
+        _totalSupply += amount;
+    }
+
+    function balanceOf(address account) public view returns (uint256) {
+        return _balances[account];
+    }
+
+    function totalSupply() public view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function transfer(address to, uint256 amount) public returns (bool) {
+        require(_balances[msg.sender] >= amount, "Insufficient balance");
+        _balances[msg.sender] -= amount;
+        _balances[to] += amount;
+        return true;
+    }
+}
 
 contract SelfTokenVaultTest is Test {
     SelfTokenVault public vault;
-    CreatorToken public token;
+    MockToken public token;
     address public creator;
     uint256 public constant INITIAL_BALANCE = 1_000_000 * 1e18;
     uint256 public constant LOCK_TIME = 180 days;
@@ -15,23 +40,7 @@ contract SelfTokenVaultTest is Test {
 
     function setUp() public {
         creator = address(0x123);
-
-        // Deploy creator token first
-        CreatorToken.TokenConfig memory config = CreatorToken.TokenConfig({
-            totalSupply: INITIAL_BALANCE,
-            selfPercent: 10,
-            marketPercent: 80,
-            supporterPercent: 10,
-            handle: keccak256(abi.encodePacked("test")),
-            aiAgent: address(this)
-        });
-
-        // Create proper distributor config
-        CreatorTokenSupporter.DistributorConfig memory distributorConfig = CreatorTokenSupporter.DistributorConfig({
-            dailyDripAmount: 1000 * 1e18,
-            dripInterval: 1 days,
-            totalDays: 100
-        });
+        token = new MockToken();
 
         // Create vault config
         SelfTokenVault.VaultConfig memory vaultConfig = SelfTokenVault.VaultConfig({
@@ -41,19 +50,14 @@ contract SelfTokenVaultTest is Test {
             lockedPercentage: 80
         });
 
-        // Deploy creator token with correct parameters
-        token = new CreatorToken(
-            "Test Token",
-            "TEST",
-            abi.encode(config),
-            abi.encode(distributorConfig), // Replace empty string with distributor config
-            abi.encode(vaultConfig), // Replace empty string with vault config
-            creator,
-            address(0)
-        );
+        // Calculate self tokens amount (10% of total)
+        uint256 selfTokens = INITIAL_BALANCE * 10 / 100;
 
-        // Get the vault address from the token instead of deploying a new one
-        vault = SelfTokenVault(token.getVaultAddress());
+        // Deploy the vault directly
+        vault = new SelfTokenVault(address(token), creator, abi.encode(vaultConfig), selfTokens);
+
+        // Mint tokens to the vault
+        token.mint(address(vault), selfTokens);
     }
 
     function testInitialSetup() public view {
@@ -63,6 +67,7 @@ contract SelfTokenVaultTest is Test {
         assertEq(vault.token(), address(token));
         assertEq(vault.owner(), creator);
         assertEq(vault.initialBalance(), expectedSelfTokens); // Fix this line
+
         assertTrue(vault.initialized());
     }
 
