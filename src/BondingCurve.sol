@@ -89,10 +89,15 @@ contract BondingCurve {
     ) public pure returns (uint256) {
         uint256 normSupply = effectiveSupply / NORMALIZER;
         uint256 normAmount = amount / NORMALIZER;
+
+        // **Updated pricing equation with a quadratic term for a steeper price increase**
         uint256 costUnits = normAmount *
             BASE_PRICE +
             SLOPE *
-            (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2);
+            (normSupply * normAmount + (normAmount * (normAmount - 1)) / 2) +
+            ((normAmount ** 2) * SLOPE) /
+            2; // **Extra quadratic impact on price**
+
         return (costUnits * 1 ether) / SCALING_FACTOR;
     }
 
@@ -128,21 +133,23 @@ contract BondingCurve {
         return rawPrice - fee;
     }
 
-function getTokensForEth(uint256 ethAmount) public view returns (uint256) {
-    uint256 low = 0;
-    uint256 high = (ethAmount * NORMALIZER) / BASE_PRICE; // Set a reasonable upper bound
-    for (uint256 i = 0; i < 20; i++) {
-        uint256 mid = (low + high) / 2;
-        uint256 price = getBuyPriceAfterFees(mid);
-        if (price <= ethAmount) {
-            low = mid;
-        } else {
-            high = mid;
+    function getTokensForEth(uint256 ethAmount) public view returns (uint256) {
+        uint256 low = 0;
+        uint256 high = (ethAmount * NORMALIZER) / BASE_PRICE; // Initial estimate
+        for (uint256 i = 0; i < 50; i++) {
+            // More iterations for accuracy
+            uint256 mid = (low + high) / 2;
+            uint256 price = getBuyPriceAfterFees(mid);
+            if (price < ethAmount) {
+                low = mid;
+            } else if (price > ethAmount) {
+                high = mid;
+            } else {
+                return mid;
+            }
         }
+        return (low + high) / 2; // Return midpoint for better accuracy
     }
-    return low;
-}
-
 
     /**
      * @notice Calculates how many tokens need to be sold to receive the given ETH amount.

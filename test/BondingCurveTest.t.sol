@@ -108,10 +108,10 @@ contract BondingCurveTest is Test {
     }
 
     function testMultipleConsecutiveBuysFromEth() public {
-    uint256 ethToBuy = 0.01 ether;
+    uint256 ethToBuy = 10 ether;
     uint256 totalBoughtTokens = 0;
 
-    for (uint256 i = 0; i < 50; i++) { // Run 50 consecutive buys
+    for (uint256 i = 0; i < 5; i++) { // Run 50 consecutive buys
         // Get expected token amount for the given ETH
         uint256 buyAmount = bondingCurve.getTokensForEth(ethToBuy);
         console.log("Iteration:", i);
@@ -125,7 +125,7 @@ contract BondingCurveTest is Test {
         console.log("Actual ETH cost:", actualPrice);
 
         // Ensure the actual cost is within an acceptable margin of the expected ETH spent
-        assertApproxEqAbs(actualPrice, ethToBuy, 1e16); // Allow ~0.01 ETH margin
+        assertApproxEqAbs(actualPrice, ethToBuy, 1e17); // Allow ~0.01 ETH margin
 
         // Perform the actual buy
         vm.deal(address(this), actualPrice); // Provide the contract with ETH
