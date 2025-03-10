@@ -158,7 +158,7 @@ contract TokenSwapRouterTest is Test {
         vm.stopPrank();
     }
 
-    function testFailSwapWithHighSlippage() public {
+    function test_RevertFailSwapWithHighSlippage() public {
         uint256 swapAmount = 100 * 1e18;
 
         // Buy tokenA from curve for the user

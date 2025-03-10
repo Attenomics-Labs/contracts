@@ -3,7 +3,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-solc = "0.8.28"
+solc = "0.8.24"
 
 # Advanced Optimization Settings
 optimizer = true                  # Enable the optimizer

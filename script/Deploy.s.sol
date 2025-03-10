@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
-
+import {TokenSwapRouter} from "../src/TokenSwapRouter.sol";
 // Import all contracts
 import {AttenomicsCreatorEntryPoint} from "../src/AttenomicsCreatorEntryPoint.sol";
 import {CreatorToken} from "../src/CreatorToken.sol";
@@ -108,6 +108,11 @@ contract Deploy is Script {
 
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
+
+        // Deploy TokenSwapRouter
+        TokenSwapRouter router = new TokenSwapRouter(protocolFeeAddress, entryPoint);
+         address tokenSwapRouter = address(router);
+        console2.log("TokenSwapRouter:", tokenSwapRouter);
 
         // Stop broadcasting transactions
         vm.stopBroadcast();
