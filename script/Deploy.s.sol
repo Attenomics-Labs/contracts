@@ -11,6 +11,7 @@ import {SelfTokenVault} from "../src/SelfTokenVault.sol";
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {GasliteDrop} from "../src/GasliteDrop.sol";
 import {CreatorTokenSupporter} from "../src/CreatorTokenSupporter.sol";
+import {TokenSwapRouter} from "../src/TokenSwapRouter.sol";
 
 contract Deploy is Script {
     // Store deployed addresses
@@ -22,6 +23,7 @@ contract Deploy is Script {
     address public supporter;
     address public protocolFeeAddress;
     address public aiAgent;
+    address public tokenSwapRouter;
 
     function run() external {
         // Get private key from environment variable
@@ -109,6 +111,11 @@ contract Deploy is Script {
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
 
+        // Deploy TokenSwapRouter
+        TokenSwapRouter router = new TokenSwapRouter(protocolFeeAddress, entryPoint);
+        tokenSwapRouter = address(router);
+        console2.log("TokenSwapRouter:", tokenSwapRouter);
+
         // Stop broadcasting transactions
         vm.stopBroadcast();
 
@@ -119,6 +126,7 @@ contract Deploy is Script {
         console2.log("EntryPoint:", entryPoint);
         console2.log("CreatorToken:", creatorToken);
         console2.log("BondingCurve:", bondingCurve);
+        console2.log("TokenSwapRouter:", tokenSwapRouter);
         console2.log("Protocol Fee Address:", protocolFeeAddress);
         console2.log("AI Agent:", aiAgent);
     }

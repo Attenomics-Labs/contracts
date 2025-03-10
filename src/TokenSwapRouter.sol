@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./BondingCurve.sol";
 import "./AttenomicsCreatorEntryPoint.sol";
-import "./CreatorToken.sol";
 import "forge-std/console.sol";
 
 /**
@@ -96,12 +95,10 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
     function swapExactTokensForTokens(
         address tokenA,
         address tokenB,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        uint256 deadline
+        uint256 amountIn
     ) external nonReentrant {
         // Step 1: Initial checks
-        if (block.timestamp > deadline) revert DeadlineExpired();
+        // if (block.timestamp > deadline) revert DeadlineExpired();
         if (tokenA == tokenB) revert InvalidToken();
         if (amountIn == 0) revert InvalidToken();
 
@@ -113,43 +110,28 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         uint256 initialETHBalance = address(this).balance;
         
         // Transfer tokenA from user
-        if (!ERC20(tokenA).transferFrom(msg.sender, address(this), amountIn)) {
-            revert TokenTransferFailed();
-        }
+        require(ERC20(tokenA).transferFrom(msg.sender, address(this), amountIn), "Transfer failed");
+        
+        // Approve curveA to spend tokenA
+        require(ERC20(tokenA).approve(address(curveA), amountIn), "Approval failed");
 
-        try curveA.sell(amountIn) returns (uint256 ethReceived) {
-            // Apply router fee
-            uint256 routerFeeAmount = (ethReceived * ROUTER_FEE) / FEE_PRECISION;
-            uint256 buyAmount = ethReceived - routerFeeAmount;
+        // Sell tokenA for ETH
+        uint256 ethReceived = curveA.sell(amountIn);
+        
+        // Calculate tokens to buy using getTokensForEth
 
-            if (routerFeeAmount > 0) {
-                payable(feeCollector).transfer(routerFeeAmount);
-            }
+        uint256 tokensToReceive = curveB.getTokensForEth(ethReceived);
+        
+        // Buy tokenB with ETH
+        uint256 amountOut = curveB.buy{value: ethReceived}(tokensToReceive - ((tokensToReceive * 10) / 100));
 
-            try curveB.buy{value: buyAmount}(buyAmount) returns (uint256 amountOut) {
-                // Verify minimum output
-                if (amountOut < minAmountOut) revert ExcessiveSlippage();
+        // Verify minimum output
+        // if (amountOut < minAmountOut) revert ExcessiveSlippage();
 
-                // Transfer tokenB to user
-                if (!ERC20(tokenB).transfer(msg.sender, amountOut)) {
-                    revert TokenTransferFailed();
-                }
+        // Transfer tokenB to user
+        require(ERC20(tokenB).transfer(msg.sender, amountOut), "Transfer failed");
 
-                emit TokenSwap(msg.sender, tokenA, tokenB, amountIn, amountOut, ethReceived);
-            } catch {
-                // If buy fails, return ETH to user
-                payable(msg.sender).transfer(buyAmount);
-                emit SwapError(msg.sender, tokenA, tokenB, amountIn, "Buy operation failed");
-                revert SwapOperationFailed();
-            }
-        } catch {
-            // If sell fails, return tokenA to user
-            if (!ERC20(tokenA).transfer(msg.sender, amountIn)) {
-                revert TokenTransferFailed();
-            }
-            emit SwapError(msg.sender, tokenA, tokenB, amountIn, "Sell operation failed");
-            revert SwapOperationFailed();
-        }
+        emit TokenSwap(msg.sender, tokenA, tokenB, amountIn, amountOut, ethReceived);
     }
 
     /**
@@ -172,24 +154,16 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
      * @return Bonding curve address
      */
     function getBondingCurveForToken(address token) internal view returns (address) {
-        address bondingCurve;
-        
-        // Try to get the bonding curve from the token directly
-        try CreatorToken(token).bondingCurve() returns (address curve) {
-            bondingCurve = curve;
-        } catch {
-            // If the call fails, it's not a valid token with a bonding curve
-            revert InvalidToken();
+        address bondingCurve = entryPoint.getBondingCurveByToken(token);
+        if (bondingCurve == address(0)) {
+            // Try to get it directly from the token contract
+            try CreatorToken(token).bondingCurve() returns (address curve) {
+                if (curve == address(0)) revert InvalidToken();
+                return curve;
+            } catch {
+                revert InvalidToken();
+            }
         }
-        
-        if (bondingCurve == address(0)) revert InvalidToken();
-        
-        // Check if the bonding curve has tokens, but don't revert if we're in the deployment phase
-        // This is determined by checking if the token has any supply yet
-        if (ERC20(token).totalSupply() > 0 && ERC20(token).balanceOf(bondingCurve) == 0) {
-            revert InvalidToken();
-        }
-        
         return bondingCurve;
     }
 
