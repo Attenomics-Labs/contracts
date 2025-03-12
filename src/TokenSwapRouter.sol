@@ -15,10 +15,6 @@ import "forge-std/console.sol";
  * @dev Uses a two-step process: Token A -> ETH -> Token B
  */
 contract TokenSwapRouter is Ownable, ReentrancyGuard {
-    // Protocol fee configuration (can be adjusted)
-    uint256 public constant ROUTER_FEE = 10; // 0.1% additional fee
-    uint256 public constant FEE_PRECISION = 10000;
-    uint256 public constant MAX_SLIPPAGE = 1000; // 10% max slippage
 
     // Protocol fee collector
     address public immutable feeCollector;
@@ -78,16 +74,12 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
 
         // Get ETH value from selling tokenA
         ethValue = curveA.getSellPriceAfterFees(amountIn);
-        
-        // Apply router fee
-        uint256 routerFeeAmount = (ethValue * ROUTER_FEE) / FEE_PRECISION;
-        ethValue -= routerFeeAmount;
 
         // Use the correct function from BondingCurve contract
-        expectedOutput = curveB.getBuyPriceAfterFees(ethValue);
+        expectedOutput = curveB.getTokensForEth(ethValue);
         
         // Calculate minimum output with max slippage
-        minOutput = (expectedOutput * (FEE_PRECISION - MAX_SLIPPAGE)) / FEE_PRECISION;
+        minOutput = expectedOutput;
     }
 
     /**
