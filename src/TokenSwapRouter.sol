@@ -77,14 +77,14 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         BondingCurve curveB = BondingCurve(payable(getBondingCurveForToken(tokenB)));
 
         // Get ETH value from selling tokenA
-        ethValue = curveA.getSellPrice(amountIn);
+        ethValue = curveA.getSellPriceAfterFees(amountIn);
         
         // Apply router fee
         uint256 routerFeeAmount = (ethValue * ROUTER_FEE) / FEE_PRECISION;
         ethValue -= routerFeeAmount;
 
         // Use the correct function from BondingCurve contract
-        expectedOutput = curveB.getBuyPrice(ethValue);
+        expectedOutput = curveB.getBuyPriceAfterFees(ethValue);
         
         // Calculate minimum output with max slippage
         minOutput = (expectedOutput * (FEE_PRECISION - MAX_SLIPPAGE)) / FEE_PRECISION;
@@ -126,7 +126,7 @@ contract TokenSwapRouter is Ownable, ReentrancyGuard {
         uint256 tokenBeforeBuy = ERC20(tokenB).balanceOf(address(this));
         
         // Buy tokenB with ETH
-        curveB.buy{value: ethReceived}(tokensToReceive - ((tokensToReceive * 10) / 100));
+        curveB.buy{value: ethReceived}(tokensToReceive - ((tokensToReceive * curveB.buyFeePercent()) / curveB.feePrecision()));
 
         uint256 tokenAfterBuy = ERC20(tokenB).balanceOf(address(this));
 
